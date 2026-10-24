@@ -54,26 +54,28 @@
   <!-- Jeu -->
   <section id="game" class="hidden">
     <canvas id="canvas"></canvas>
-    <div id="hud">
-      <div class="stat"><span>Or</span><b id="hudGold">0</b></div>
-      <div class="stat"><span>Revenu</span><b id="hudIncome">+0/s</b></div>
-      <div class="stat"><span>Territoires</span><b id="hudTerr">0</b></div>
-      <div class="stat"><span>Soldats</span><b id="hudTroops">0</b></div>
-      <div class="stat"><span>Envoi</span><b id="hudPct">50%</b></div>
+    <div id="topbar">
+      <div class="tb-actions">
+        <button id="btnQuit">Quitter</button>
+        <button id="btnRestart">Recommencer</button>
+      </div>
+      <div id="hud">
+        <div class="stat"><span>Or</span><b id="hudGold">0</b></div>
+        <div class="stat"><span>Revenu</span><b id="hudIncome">+0/s</b></div>
+        <div class="stat"><span>Terr.</span><b id="hudTerr">0</b></div>
+        <div class="stat"><span>Soldats</span><b id="hudTroops">0</b></div>
+      </div>
     </div>
     <div id="scoreboard"></div>
-    <div id="panel" class="hidden">
-      <div class="ptitle"><span id="pName"></span><small id="pInfo"></small></div>
-      <div class="row buy">
-        <span>Acheter (<span id="pCost"></span> or) :</span>
+    <div id="bottombar">
+      <div id="pSel"><b id="pName">Aucune sélection</b><small id="pInfo">Clique sur un de tes territoires</small></div>
+      <div class="group"><span>Achat <small id="pCost"></small></span>
         <button data-buy="1">+1</button><button data-buy="5">+5</button><button data-buy="10">+10</button><button data-buy="max">Max</button>
       </div>
-      <div class="row pct">
-        <span>Troupes envoyées :</span>
+      <div class="group"><span>Envoi</span>
         <button data-pct="25">25%</button><button data-pct="50">50%</button><button data-pct="75">75%</button><button data-pct="100">100%</button>
       </div>
     </div>
-    <div id="help">Clic sur ton territoire = sélection · clic sur un voisin = envoyer des troupes · <b>B</b> acheter max · <b>1-4</b> % envoi · clic droit/Échap = désélection</div>
     <div id="overlay" class="hidden"><div class="card"><h2 id="overTitle"></h2><button id="btnMenu" class="primary">Retour au menu</button></div></div>
   </section>
 

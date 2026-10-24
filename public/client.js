@@ -31,8 +31,9 @@
   if (joinParam) $('joinCode').value = joinParam.toUpperCase();
 
   // ---------- Solo ----------
-  $('btnSolo').onclick = () => {
-    const n = +$('botCount').value, level = $('botLevel').value;
+  $('btnSolo').onclick = () => startSolo(+$('botCount').value, $('botLevel').value);
+  function startSolo(n, level) {
+    G.lastSolo = { n, level };
     const players = [{ id: 'me', name: playerName(), bot: false }];
     for (let i = 1; i <= n; i++) players.push({ id: 'bot' + i, name: 'Bot ' + i, bot: level });
     const seed = Math.floor(Math.random() * 2 ** 31);
@@ -40,7 +41,7 @@
     setupGame(seed, players);
     G.state = E.createGame(G.map, players, seed ^ 0x5bd1e995);
     G.me = 0;
-  };
+  }
 
   // ---------- Multi ----------
   async function post(route, body) {
@@ -118,6 +119,7 @@
     G.view = { zoom: 1, cx: G.map.w / 2, cy: G.map.h / 2 };
     buildPaths();
     $('overlay').classList.add('hidden');
+    $('btnRestart').classList.toggle('hidden', G.mode !== 'solo');
     show('game');
     resize();
   }
@@ -197,6 +199,7 @@
 
   // ---------- Vue ----------
   let DPR = 1;
+  const BAR_TOP = 50, BAR_BOT = 58;
   function resize() {
     DPR = window.devicePixelRatio || 1;
     canvas.width = canvas.clientWidth * DPR;
@@ -206,16 +209,16 @@
 
   function viewScale() {
     const m = G.map;
-    const fit = Math.min(canvas.width / (m.w + 4), (canvas.height - 120 * DPR) / (m.h + 4));
+    const fit = Math.min(canvas.width / (m.w + 4), (canvas.height - (BAR_TOP + BAR_BOT + 10) * DPR) / (m.h + 4));
     return Math.max(fit, 1) * G.view.zoom;
   }
   function toScreen(x, y) {
     const s = viewScale();
-    return [canvas.width / 2 + (x - G.view.cx) * s, canvas.height / 2 + 20 * DPR + (y - G.view.cy) * s];
+    return [canvas.width / 2 + (x - G.view.cx) * s, canvas.height / 2 + (BAR_TOP - BAR_BOT) / 2 * DPR + (y - G.view.cy) * s];
   }
   function toMap(sx, sy) {
     const s = viewScale();
-    return [(sx * DPR - canvas.width / 2) / s + G.view.cx, (sy * DPR - canvas.height / 2 - 20 * DPR) / s + G.view.cy];
+    return [(sx * DPR - canvas.width / 2) / s + G.view.cx, (sy * DPR - canvas.height / 2 - (BAR_TOP - BAR_BOT) / 2 * DPR) / s + G.view.cy];
   }
   function terrAt(sx, sy) {
     const [x, y] = toMap(sx, sy);
@@ -302,7 +305,6 @@
   document.querySelectorAll('[data-pct]').forEach(b => b.onclick = () => setPct(+b.dataset.pct / 100));
   function setPct(p) {
     G.pct = p;
-    $('hudPct').textContent = Math.round(p * 100) + '%';
     document.querySelectorAll('[data-pct]').forEach(b => b.classList.toggle('active', +b.dataset.pct / 100 === p));
   }
   setPct(0.5);
@@ -313,12 +315,30 @@
     if (['1', '2', '3', '4'].includes(e.key)) setPct(+e.key * 0.25);
   });
 
-  $('btnMenu').onclick = () => {
+  function quit() {
     if (G.es) G.es.close();
     G.es = null; G.state = null; G.map = null; G.mode = null;
     $('overlay').classList.add('hidden');
     show('menu');
-  };
+  }
+  $('btnMenu').onclick = quit;
+
+  // Boutons de la barre du haut : un 2e clic confirme (sauf si la partie est finie)
+  function confirmable(btn, label, action) {
+    let timer = null;
+    btn.onclick = () => {
+      const over = G.state && (G.state.winner != null || !G.state.players[G.me].alive);
+      if (over || btn.classList.contains('confirm')) {
+        clearTimeout(timer); btn.classList.remove('confirm'); btn.textContent = label;
+        action();
+        return;
+      }
+      btn.classList.add('confirm'); btn.textContent = 'Confirmer ?';
+      timer = setTimeout(() => { btn.classList.remove('confirm'); btn.textContent = label; }, 3000);
+    };
+  }
+  confirmable($('btnQuit'), 'Quitter', quit);
+  confirmable($('btnRestart'), 'Recommencer', () => startSolo(G.lastSolo.n, G.lastSolo.level));
 
   // ---------- Rendu ----------
   function draw() {
@@ -416,19 +436,23 @@
       return `<div class="${p.alive ? '' : 'dead'}"><span class="dot" style="background:${p.color}"></span>${escapeHtml(p.name)}${i === G.me ? ' (toi)' : ''}<span class="n">${counts[i]}</span></div>`;
     }).join('');
 
-    // Panneau du territoire sélectionné
+    // Barre du bas : sélection + achat
     const sel = G.selected;
-    $('panel').classList.toggle('hidden', sel < 0);
+    const own = sel >= 0 && st.territories[sel].owner === G.me;
     if (sel >= 0) {
       const t = st.territories[sel];
       const owner = t.owner >= 0 ? st.players[t.owner].name : 'Neutre';
       $('pName').textContent = m.terr[sel].name;
       $('pInfo').textContent = `${owner} · ${t.troops} soldats · +${m.terr[sel].income} or/s`;
-      $('pCost').textContent = E.CFG.SOLDIER_COST;
-      const own = t.owner === G.me;
-      document.querySelector('#panel .buy').classList.toggle('hidden', !own);
-      document.querySelector('#panel .pct').classList.toggle('hidden', !own);
+    } else {
+      $('pName').textContent = 'Aucune sélection';
+      $('pInfo').textContent = 'Clique sur un de tes territoires';
     }
+    $('pCost').textContent = '(' + E.CFG.SOLDIER_COST + ' or)';
+    const canBuy = own && me.gold >= E.CFG.SOLDIER_COST;
+    document.querySelectorAll('[data-buy]').forEach(b => {
+      b.disabled = !canBuy || (b.dataset.buy !== 'max' && me.gold < +b.dataset.buy * E.CFG.SOLDIER_COST);
+    });
 
     // Fin de partie / élimination
     if (!G.overDismissed) {

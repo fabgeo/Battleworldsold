@@ -24,28 +24,39 @@ button.active { background: #2f7de1; }
 
 #game { position: fixed; inset: 0; }
 #canvas { display: block; width: 100%; height: 100%; cursor: pointer; }
-#hud { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; background: #1d2228e0; padding: 6px 10px; border-radius: 10px; max-width: calc(100% - 16px); flex-wrap: wrap; justify-content: center; }
-.stat { display: flex; flex-direction: column; align-items: center; min-width: 64px; }
-.stat span { font-size: 11px; color: #9aa5b1; text-transform: uppercase; }
-.stat b { font-size: 17px; }
-#scoreboard { position: absolute; top: 72px; right: 8px; background: #1d2228e0; border-radius: 10px; padding: 8px 10px; font-size: 13px; min-width: 150px; }
+#topbar { position: absolute; top: 0; left: 0; right: 0; height: 50px; display: flex; align-items: center; gap: 12px; padding: 0 max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px)); background: #1d2228f0; border-bottom: 1px solid #3a434e; }
+.tb-actions { display: flex; gap: 6px; flex: none; }
+.tb-actions button { padding: 6px 10px; font-size: 13px; }
+.tb-actions button.confirm { background: #c0392b; }
+#hud { display: flex; gap: 14px; margin-left: auto; min-width: 0; }
+.stat { display: flex; flex-direction: column; align-items: center; }
+.stat span { font-size: 10px; color: #9aa5b1; text-transform: uppercase; letter-spacing: 0.5px; }
+.stat b { font-size: 16px; font-variant-numeric: tabular-nums; }
+#scoreboard { position: absolute; top: 58px; right: 8px; background: #1d2228e0; border-radius: 10px; padding: 8px 10px; font-size: 13px; min-width: 150px; }
 #scoreboard div { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
 #scoreboard .dead { opacity: 0.4; text-decoration: line-through; }
 #scoreboard .n { margin-left: auto; color: #9aa5b1; padding-left: 10px; }
-#panel { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); background: #1d2228f0; border-radius: 10px; padding: 10px 14px; max-width: calc(100% - 16px); }
-.ptitle { display: flex; align-items: baseline; gap: 10px; font-weight: 600; font-size: 17px; }
-.ptitle small { color: #9aa5b1; font-weight: 400; font-size: 13px; }
-#panel .row span { color: #9aa5b1; font-size: 13px; min-width: 150px; }
-#panel button { padding: 5px 12px; }
-#help { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); font-size: 12px; color: #c9d1d9; background: #1d2228c0; padding: 4px 10px; border-radius: 6px; white-space: nowrap; max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; }
+#bottombar { position: absolute; bottom: 0; left: 0; right: 0; height: 58px; display: flex; align-items: center; gap: 18px; padding: 0 max(10px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(10px, env(safe-area-inset-left, 0px)); background: #1d2228f0; border-top: 1px solid #3a434e; overflow-x: auto; white-space: nowrap; }
+#pSel { display: flex; flex-direction: column; min-width: 0; flex: 1; overflow: hidden; }
+#pSel b, #pSel small { overflow: hidden; text-overflow: ellipsis; }
+#pSel small { color: #9aa5b1; font-size: 12px; }
+#bottombar .group { display: flex; align-items: center; gap: 5px; flex: none; }
+#bottombar .group > span { color: #9aa5b1; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-right: 2px; }
+#bottombar button { padding: 7px 11px; font-variant-numeric: tabular-nums; }
+#bottombar button:disabled { opacity: 0.35; cursor: default; background: #3a434e; }
 #overlay { position: absolute; inset: 0; background: #0008; display: flex; align-items: center; justify-content: center; padding: 16px; }
 #overlay h2 { font-size: 24px; text-align: center; margin-top: 0; }
-@media (max-width: 600px) {
-  #hud { flex-wrap: nowrap; gap: 2px; padding: 4px 6px; }
-  .stat { min-width: 0; padding: 0 4px; }
+@media (max-width: 700px) {
+  #topbar { gap: 8px; }
+  #hud { gap: 8px; }
   .stat span { font-size: 9px; }
   .stat b { font-size: 14px; }
-  #scoreboard { top: auto; bottom: 150px; font-size: 12px; min-width: 0; }
-  #help { display: none; }
-  #panel { bottom: 8px; }
+  .tb-actions button { padding: 6px 8px; font-size: 12px; }
+  #scoreboard { font-size: 11px; min-width: 0; padding: 5px 8px; }
+  #bottombar { gap: 8px; }
+  #bottombar .group { gap: 3px; }
+  #bottombar .group > span { display: none; }
+  #bottombar button { padding: 7px 5px; font-size: 12px; min-width: 32px; }
+  #pSel { min-width: 50px; font-size: 13px; }
+  #pSel small { font-size: 11px; }
 }

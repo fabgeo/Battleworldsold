@@ -14,7 +14,7 @@
     START_GOLD: 25,
     START_TROOPS: 12,
     DEF_BONUS: 1.2,        // multiplicateur des défenseurs
-    ARMY_SPEED: 40,        // cases par seconde
+    ARMY_SPEED: 12,        // cases par seconde
     BOT_THINK: { easy: 2.6, normal: 1.6, hard: 0.9 },
   };
 
