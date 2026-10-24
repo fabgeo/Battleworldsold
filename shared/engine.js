@@ -1,24 +1,51 @@
 // Moteur de jeu partagé : utilisé par le navigateur (solo) et le serveur (multi).
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.Engine = factory();
-})(typeof self !== 'undefined' ? self : this, function () {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./europe-map.js'));
+  else root.Engine = factory(root.EUROPE_MAP);
+})(typeof self !== 'undefined' ? self : this, function (EUROPE) {
   'use strict';
 
   const CFG = {
-    MAP_W: 160,
-    MAP_H: 100,
-    TERRITORIES: 45,
     SOLDIER_COST: 5,
+    BASE_INCOME: 5,        // or/s pour chaque joueur, quoi qu'il possède
     CAPITAL_BONUS: 3,      // or/s en plus pour la capitale
     START_GOLD: 25,
     START_TROOPS: 12,
-    DEF_BONUS: 1.2,        // multiplicateur des défenseurs
-    ARMY_SPEED: 12,        // cases par seconde
+    DEF_BONUS: 1.2,        // multiplicateur de base des défenseurs
+    ARMY_SPEED: 12,        // cases par seconde sur plaine
+    FATIGUE: 0.05,         // perte par étape au-delà des étapes gratuites
+    FREE_LEGS: 2,
+    BARRACKS_EVERY: 3,     // secondes entre deux soldats produits par une caserne
+    HISTORY_EVERY: 5,      // secondes entre deux points des statistiques
     BOT_THINK: { easy: 2.6, normal: 1.6, hard: 0.9 },
   };
 
+  const TERRAIN = {
+    plain: { name: 'Plaine', def: 1, speed: 1, income: 0 },
+    forest: { name: 'Forêt', def: 1.25, speed: 0.7, income: 0 },
+    mountain: { name: 'Montagne', def: 1.6, speed: 0.5, income: 0 },
+    city: { name: 'Ville', def: 1.1, speed: 1, income: 2 },
+  };
+
+  const BUILDINGS = {
+    fort: { name: 'Fort', cost: 60, desc: 'Défense ×1,5', letter: 'F' },
+    mine: { name: 'Mine', cost: 50, desc: '+2 or/s', letter: 'M' },
+    barracks: { name: 'Caserne', cost: 80, desc: '+1 soldat / 3 s', letter: 'C' },
+  };
+
+  const SIZES = { small: 30, medium: 45, large: 65 };
   const COLORS = ['#e6194b', '#3c7dd9', '#3cb44b', '#f58231', '#911eb4', '#16b5b5', '#d6c400', '#f032e6'];
+
+  // Réglages par défaut ("auto") complétés selon le nombre de joueurs
+  function resolveOpts(opts, nPlayers) {
+    opts = opts || {};
+    const map = opts.map === 'europe' ? 'europe' : 'random';
+    let size = SIZES[opts.size];
+    if (!size) size = Math.max(30, Math.min(70, 20 + nPlayers * 7));
+    const speed = [0.75, 1, 1.5].includes(+opts.speed) ? +opts.speed : 1;
+    const startGold = opts.startGold === 'auto' || opts.startGold == null || isNaN(+opts.startGold) ? CFG.START_GOLD : Math.max(0, Math.min(1000, +opts.startGold));
+    return { map, size, speed, startGold, buildings: opts.buildings !== false };
+  }
 
   // ---------- RNG déterministe ----------
   function mulberry(seed) {
@@ -71,7 +98,9 @@
 
   function generateMap(seed, opts) {
     opts = opts || {};
-    const W = opts.w || CFG.MAP_W, H = opts.h || CFG.MAP_H, N = opts.n || CFG.TERRITORIES;
+    if (opts.map === 'europe') return europeMap(seed);
+    const N = opts.size || 45;
+    const H = Math.round(Math.sqrt(N * 355 / 1.6)), W = Math.round(H * 1.6);
     const r = mulberry(seed);
 
     // Germes espacés (échantillonnage par rejet)
@@ -120,18 +149,18 @@
       comps.push({ id, comp });
       if (!bestComp[id] || bestComp[id].length < comp.length) bestComp[id] = comp;
     }
-    for (const { id, comp } of comps) if (comp !== bestComp[id]) for (const c of comp) cells[c] = -1;
+    for (const { id, comp } of comps) if (comp !== bestComp[id]) for (const c of comp) cells[c] = -2;
     let pending = true;
     while (pending) {
       pending = false;
       const copy = cells.slice();
       for (let i = 0; i < W * H; i++) {
-        if (copy[i] !== -1) continue;
+        if (copy[i] !== -2) continue;
         const x = i % W, y = (i / W) | 0;
         const nb = [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, y > 0 ? i - W : -1, y < H - 1 ? i + W : -1];
-        let v = -1;
-        for (const n of nb) if (n >= 0 && copy[n] !== -1) { v = copy[n]; break; }
-        if (v === -1) pending = true; else cells[i] = v;
+        let v = -2;
+        for (const n of nb) if (n >= 0 && copy[n] !== -2) { v = copy[n]; break; }
+        if (v === -2) pending = true; else cells[i] = v;
       }
     }
 
@@ -142,28 +171,58 @@
     for (let i = 0; i < W * H; i++) cells[i] = remap[cells[i]];
 
     const used = new Set();
-    const terr = [];
+    const defs = [];
     for (let i = 0; i < count; i++) {
-      terr.push({ id: i, name: makeName(r, used), size: 0, sx: 0, sy: 0, neighbors: new Set(), lx: 0, ly: 0, income: 1 + Math.floor(r() * 3) });
+      const v = r();
+      const terrain = v < 0.5 ? 'plain' : v < 0.75 ? 'forest' : v < 0.9 ? 'mountain' : 'city';
+      defs.push({ name: makeName(r, used), income: 1 + Math.floor(r() * 3), terrain });
     }
+    return buildMap(seed, W, H, cells, defs, []);
+  }
 
-    // Adjacence, segments de frontière, distance au bord
-    const segments = []; // [x1,y1,x2,y2,a,b] (b = -1 pour le bord de la carte)
+  function europeMap(seed) {
+    const d = EUROPE;
+    const cells = new Int16Array(d.w * d.h);
+    let p = 0;
+    for (let i = 0; i < d.rle.length; i += 2) { cells.fill(d.rle[i], p, p + d.rle[i + 1]); p += d.rle[i + 1]; }
+    return buildMap(seed, d.w, d.h, cells, d.regions.map(r => ({ name: r.name, income: r.income, terrain: r.terrain, country: r.country })), d.seaLinks);
+  }
+
+  // Construit la carte à partir d'une grille (-1 = mer) et de la liste des territoires
+  function buildMap(seed, W, H, cells, defs, seaLinks) {
+    const count = defs.length;
+    const terr = defs.map((d, i) => ({ id: i, name: d.name, country: d.country, income: d.income, terrain: d.terrain, size: 0, sx: 0, sy: 0, neighbors: new Set(), sea: [], lx: 0, ly: 0 }));
+
+    // Adjacence, segments de frontière (b = -1 : côte), distance au bord
+    const segments = [];
     const dist = new Int32Array(W * H).fill(-1);
     const queue = [];
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         const i = y * W + x, a = cells[i];
+        if (a < 0) {
+          if (x < W - 1 && cells[i + 1] >= 0) segments.push([x + 1, y, x + 1, y + 1, cells[i + 1], -1]);
+          if (y < H - 1 && cells[i + W] >= 0) segments.push([x, y + 1, x + 1, y + 1, cells[i + W], -1]);
+          continue;
+        }
         const t = terr[a];
         t.size++; t.sx += x + 0.5; t.sy += y + 0.5;
         let border = x === 0 || y === 0 || x === W - 1 || y === H - 1;
         if (x < W - 1) {
           const b = cells[i + 1];
-          if (b !== a) { t.neighbors.add(b); terr[b].neighbors.add(a); segments.push([x + 1, y, x + 1, y + 1, a, b]); border = true; }
+          if (b !== a) {
+            border = true;
+            if (b >= 0) { t.neighbors.add(b); terr[b].neighbors.add(a); }
+            segments.push([x + 1, y, x + 1, y + 1, a, b]);
+          }
         }
         if (y < H - 1) {
           const b = cells[i + W];
-          if (b !== a) { t.neighbors.add(b); terr[b].neighbors.add(a); segments.push([x, y + 1, x + 1, y + 1, a, b]); border = true; }
+          if (b !== a) {
+            border = true;
+            if (b >= 0) { t.neighbors.add(b); terr[b].neighbors.add(a); }
+            segments.push([x, y + 1, x + 1, y + 1, a, b]);
+          }
         }
         if (x > 0 && cells[i - 1] !== a) border = true;
         if (y > 0 && cells[i - W] !== a) border = true;
@@ -173,17 +232,22 @@
     for (let k = 0; k < queue.length; k++) {
       const c = queue[k], x = c % W, y = (c / W) | 0;
       const nb = [x > 0 ? c - 1 : -1, x < W - 1 ? c + 1 : -1, y > 0 ? c - W : -1, y < H - 1 ? c + W : -1];
-      for (const n of nb) if (n >= 0 && dist[n] === -1) { dist[n] = dist[c] + 1; queue.push(n); }
+      for (const n of nb) if (n >= 0 && cells[n] >= 0 && dist[n] === -1) { dist[n] = dist[c] + 1; queue.push(n); }
     }
-    const bestD = new Array(count).fill(-1);
+    const bestD = new Array(count).fill(-Infinity);
     for (let i = 0; i < W * H; i++) {
-      const a = cells[i], t = terr[a];
+      const a = cells[i];
+      if (a < 0) continue;
+      const t = terr[a];
       const cx = t.sx / t.size, cy = t.sy / t.size;
       const x = i % W + 0.5, y = ((i / W) | 0) + 0.5;
       const score = dist[i] * 4 - Math.hypot(x - cx, y - cy);
-      if (bestD[a] === -1 || score > bestD[a]) { bestD[a] = score; t.lx = x; t.ly = y; }
+      if (score > bestD[a]) { bestD[a] = score; t.lx = x; t.ly = y; }
     }
-
+    for (const [a, b] of seaLinks) {
+      terr[a].neighbors.add(b); terr[b].neighbors.add(a);
+      terr[a].sea.push(b); terr[b].sea.push(a);
+    }
     for (const t of terr) {
       t.neighbors = Array.from(t.neighbors).sort((a, b) => a - b);
       delete t.sx; delete t.sy;
@@ -204,6 +268,7 @@
       return bad;
     };
     for (const [x1, y1, x2, y2, a, b] of segments) {
+      if (b < 0) continue;
       const k = a < b ? a + '-' + b : b + '-' + a;
       const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
       const A = terr[a], B = terr[b];
@@ -211,7 +276,21 @@
       const score = len + 100 * (outside(A.lx, A.ly, mx, my, a, b) + outside(mx, my, B.lx, B.ly, a, b));
       if (bestC[k] === undefined || score < bestC[k]) { bestC[k] = score; crossing[k] = [mx, my]; }
     }
-    return { seed, w: W, h: H, cells, terr, segments, crossing };
+    // Passages maritimes : milieu entre les deux côtes les plus proches
+    for (const [a, b] of seaLinks) {
+      const k = a < b ? a + '-' + b : b + '-' + a;
+      if (crossing[k]) continue;
+      const coast = (id) => {
+        const out = [];
+        for (const s of segments) if (s[4] === id && s[5] === -1) out.push([(s[0] + s[2]) / 2, (s[1] + s[3]) / 2]);
+        return out;
+      };
+      const ca = coast(a), cb = coast(b);
+      let best = null, bd = Infinity;
+      for (const p of ca) for (const q of cb) { const d = (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2; if (d < bd) { bd = d; best = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]; } }
+      crossing[k] = best || [(terr[a].lx + terr[b].lx) / 2, (terr[a].ly + terr[b].ly) / 2];
+    }
+    return { seed, w: W, h: H, cells, terr, segments, crossing, seaLinks };
   }
 
   // Distances en sauts dans le graphe
@@ -225,11 +304,12 @@
 
   // ---------- Partie ----------
   // players: [{ id, name, bot: false | 'easy'|'normal'|'hard' }]
-  function createGame(map, players, seed) {
+  function createGame(map, players, seed, opts) {
+    opts = resolveOpts(opts, players.length);
     const state = {
-      time: 0, rng: seed | 0, incomeAcc: 0, nextArmy: 1, winner: null,
-      territories: map.terr.map(() => ({ owner: -1, troops: 0 })),
-      players: [], armies: [],
+      time: 0, rng: seed | 0, incomeAcc: 0, sec: 0, nextArmy: 1, winner: null, opts,
+      territories: map.terr.map(() => ({ owner: -1, troops: 0, building: null })),
+      players: [], armies: [], history: [], bigBattle: null,
     };
     for (let i = 0; i < map.terr.length; i++) {
       state.territories[i].troops = 2 + map.terr[i].income * 2 + Math.floor(srand(state) * 4);
@@ -257,61 +337,85 @@
     players.forEach((p, i) => {
       state.players.push({
         id: p.id, name: p.name, bot: p.bot || false, color: COLORS[i % COLORS.length],
-        gold: CFG.START_GOLD, alive: true, capital: caps[i], nextThink: 1 + srand(state),
+        gold: opts.startGold, alive: true, capital: caps[i], nextThink: 1 + srand(state),
+        stats: { bought: 0, captures: 0, lost: 0, peakTerr: 1, capitals: 0, built: 0 },
       });
       state.territories[caps[i]].owner = i;
       state.territories[caps[i]].troops = CFG.START_TROOPS;
     });
+    recordHistory(state);
     return state;
   }
 
+  function recordHistory(state) {
+    const counts = state.players.map(() => 0);
+    for (const t of state.territories) if (t.owner >= 0) counts[t.owner]++;
+    state.history.push(counts);
+  }
+
   function incomeOf(state, map, pi) {
-    let inc = 0;
-    state.territories.forEach((t, i) => { if (t.owner === pi) inc += map.terr[i].income; });
+    let inc = CFG.BASE_INCOME;
+    state.territories.forEach((t, i) => {
+      if (t.owner !== pi) return;
+      inc += map.terr[i].income + TERRAIN[map.terr[i].terrain].income;
+      if (t.building === 'mine') inc += 2;
+    });
     if (state.players[pi].capital != null && state.territories[state.players[pi].capital].owner === pi) inc += CFG.CAPITAL_BONUS;
     return inc;
+  }
+
+  // Multiplicateur de défense d'un territoire (terrain + fort)
+  function defenseOf(state, map, i) {
+    return CFG.DEF_BONUS * TERRAIN[map.terr[i].terrain].def * (state.territories[i].building === 'fort' ? 1.5 : 1);
   }
 
   function crossingPoint(map, a, b) {
     return map.crossing[a < b ? a + '-' + b : b + '-' + a];
   }
 
+  // Durée d'une étape : moitié du trajet au rythme du terrain de départ, moitié au rythme de l'arrivée
   function travelTime(map, a, b) {
     const A = map.terr[a], B = map.terr[b], P = crossingPoint(map, a, b);
-    return (Math.hypot(A.lx - P[0], A.ly - P[1]) + Math.hypot(P[0] - B.lx, P[1] - B.ly)) / CFG.ARMY_SPEED + 0.3;
+    const d1 = Math.hypot(A.lx - P[0], A.ly - P[1]), d2 = Math.hypot(P[0] - B.lx, P[1] - B.ly);
+    return (d1 / TERRAIN[A.terrain].speed + d2 / TERRAIN[B.terrain].speed) / CFG.ARMY_SPEED + 0.3;
   }
 
-  // Position (en cases) d'une armée sur le trajet a -> frontière -> b, k entre 0 et 1
+  // Position (en cases) d'une armée sur le trajet a -> frontière -> b, k entre 0 et 1 (temps écoulé)
   function legPos(map, a, b, k) {
     const A = map.terr[a], B = map.terr[b], P = crossingPoint(map, a, b);
     const d1 = Math.hypot(A.lx - P[0], A.ly - P[1]), d2 = Math.hypot(P[0] - B.lx, P[1] - B.ly);
-    const d = k * (d1 + d2);
-    if (d <= d1) { const f = d1 ? d / d1 : 0; return [A.lx + (P[0] - A.lx) * f, A.ly + (P[1] - A.ly) * f]; }
-    const f = d2 ? (d - d1) / d2 : 1;
+    const t1 = d1 / TERRAIN[A.terrain].speed, t2 = d2 / TERRAIN[B.terrain].speed;
+    const t = k * (t1 + t2);
+    if (t <= t1) { const f = t1 ? t / t1 : 0; return [A.lx + (P[0] - A.lx) * f, A.ly + (P[1] - A.ly) * f]; }
+    const f = t2 ? (t - t1) / t2 : 1;
     return [P[0] + (B.lx - P[0]) * f, P[1] + (B.ly - P[1]) * f];
   }
 
-  // Chemin le plus court de `from` vers `to` en ne traversant que des territoires du joueur.
+  // Chemin le plus rapide de `from` vers `to`. Traverser un territoire qui n'est pas à soi
+  // coûte plus cher (il faudra l'attaquer), donc on l'évite quand un détour raisonnable existe.
   // Retourne la liste des étapes après `from` (la dernière est `to`), ou null.
   function findPath(state, map, pi, from, to) {
-    if (from === to) return null;
-    const prev = new Array(map.terr.length).fill(-1);
-    prev[from] = from;
-    const q = [from];
-    for (let k = 0; k < q.length; k++) {
-      const c = q[k];
-      for (const n of map.terr[c].neighbors) {
-        if (prev[n] !== -1) continue;
-        prev[n] = c;
-        if (n === to) {
-          const path = [to];
-          for (let x = c; x !== from; x = prev[x]) path.unshift(x);
-          return path;
-        }
-        if (state.territories[n].owner === pi) q.push(n);
+    if (from === to || to < 0 || to >= map.terr.length) return null;
+    const N = map.terr.length;
+    const cost = new Array(N).fill(Infinity), prev = new Array(N).fill(-1), done = new Array(N).fill(false);
+    cost[from] = 0;
+    for (;;) {
+      let u = -1;
+      for (let i = 0; i < N; i++) if (!done[i] && cost[i] < Infinity && (u < 0 || cost[i] < cost[u])) u = i;
+      if (u < 0) return null;
+      if (u === to) break;
+      done[u] = true;
+      for (const v of map.terr[u].neighbors) {
+        if (done[v]) continue;
+        let c = travelTime(map, u, v);
+        const tv = state.territories[v];
+        if (v !== to && tv.owner !== pi) c += 4 + tv.troops * defenseOf(state, map, v) * 0.5;
+        if (cost[u] + c < cost[v]) { cost[v] = cost[u] + c; prev[v] = u; }
       }
     }
-    return null;
+    const path = [];
+    for (let x = to; x !== from; x = prev[x]) path.unshift(x);
+    return path;
   }
 
   // Retourne true si l'action est valide et appliquée
@@ -326,6 +430,15 @@
       if (n <= 0) return false;
       p.gold -= n * CFG.SOLDIER_COST;
       t.troops += n;
+      p.stats.bought += n;
+      return true;
+    }
+    if (act.type === 'build') {
+      const t = state.territories[act.t], b = BUILDINGS[act.kind];
+      if (!state.opts.buildings || !t || !b || t.owner !== pi || t.building || p.gold < b.cost) return false;
+      p.gold -= b.cost;
+      t.building = act.kind;
+      p.stats.built++;
       return true;
     }
     if (act.type === 'send') {
@@ -333,29 +446,48 @@
       if (!from || from.owner !== pi) return false;
       const path = findPath(state, map, pi, act.from, act.to);
       if (!path) return false;
-      const n = Math.min(Math.floor(act.n) || 0, from.troops);
+      const n = Math.min(Math.floor(act.n) || 0, from.troops - 1); // il reste toujours 1 soldat
       if (n <= 0) return false;
       from.troops -= n;
       const first = path.shift();
-      state.armies.push({ id: state.nextArmy++, owner: pi, from: act.from, to: first, path, n, t: 0, dur: travelTime(map, act.from, first) });
+      state.armies.push({ id: state.nextArmy++, owner: pi, from: act.from, to: first, path, n, t: 0, dur: travelTime(map, act.from, first), legs: 1 });
       return true;
     }
     return false;
   }
 
-  function resolveArrival(state, a) {
+  // Combat à l'arrivée sur un territoire. Retourne true si l'armée y est maîtresse ensuite.
+  function resolveArrival(state, map, a) {
     const t = state.territories[a.to];
-    if (t.owner === a.owner) { t.troops += a.n; return; }
+    if (t.owner === a.owner) { t.troops += a.n; return true; }
     const r = 0.85 + srand(state) * 0.3;
-    const att = a.n * r, def = t.troops * CFG.DEF_BONUS;
+    const att = a.n * r, def = t.troops * defenseOf(state, map, a.to);
+    const size = a.n + t.troops;
+    if (!state.bigBattle || size > state.bigBattle.size) {
+      state.bigBattle = { size, where: a.to, attacker: a.owner, defender: t.owner, att: a.n, def: t.troops, time: Math.round(state.time) };
+    }
     if (att > def) {
       const prev = t.owner;
       t.owner = a.owner;
       t.troops = Math.max(1, Math.round(att - def));
-      if (prev >= 0 && state.players[prev].capital === a.to) state.players[prev].capital = null;
-    } else {
-      t.troops = Math.max(0, Math.round((def - att) / CFG.DEF_BONUS));
+      const me = state.players[a.owner];
+      me.stats.captures++;
+      if (prev >= 0) {
+        const pp = state.players[prev];
+        pp.stats.lost++;
+        // Capitale prise : le vaincu perd la moitié de son or, le vainqueur la récupère
+        if (pp.capital === a.to) {
+          const half = Math.floor(pp.gold / 2);
+          pp.gold -= half;
+          me.gold += half;
+          pp.capital = null;
+          me.stats.capitals++;
+        }
+      }
+      return true;
     }
+    t.troops = Math.max(0, Math.round((def - att) / defenseOf(state, map, a.to)));
+    return false;
   }
 
   // Deux armées ennemies sur le même chemin en sens inverse se battent quand elles se croisent
@@ -379,37 +511,56 @@
 
   function step(state, map, dt) {
     if (state.winner != null) return;
+    dt *= state.opts.speed;
     state.time += dt;
     state.incomeAcc += dt;
     while (state.incomeAcc >= 1) {
       state.incomeAcc -= 1;
+      state.sec++;
       state.players.forEach((p, i) => { if (p.alive) p.gold += incomeOf(state, map, i); });
+      if (state.sec % CFG.BARRACKS_EVERY === 0) for (const t of state.territories) if (t.building === 'barracks' && t.owner >= 0) t.troops++;
+      if (state.sec % CFG.HISTORY_EVERY === 0) recordHistory(state);
     }
+
     for (const a of state.armies) a.t += dt;
     armyClashes(state);
     const keep = [];
     for (const a of state.armies) {
       if (a.n <= 0) continue;
       if (a.t < a.dur) { keep.push(a); continue; }
-      // Étape intermédiaire : on continue si le territoire nous appartient toujours
-      if (a.path && a.path.length && state.territories[a.to].owner === a.owner) {
-        a.from = a.to;
-        a.to = a.path.shift();
-        a.t = 0;
-        a.dur = travelTime(map, a.from, a.to);
-        keep.push(a);
-      } else resolveArrival(state, a);
+      if (!a.path || !a.path.length) { resolveArrival(state, map, a); continue; }
+      // Étape intermédiaire : chez soi on passe, sinon on attaque. Si on gagne, on laisse 1 soldat et on continue.
+      const here = state.territories[a.to];
+      if (here.owner !== a.owner) {
+        if (!resolveArrival(state, map, a)) continue;
+        if (here.troops < 2) continue;
+        a.n = here.troops - 1;
+        here.troops = 1;
+      }
+      a.legs++;
+      if (a.legs > CFG.FREE_LEGS) a.n = Math.max(1, Math.round(a.n * (1 - CFG.FATIGUE)));
+      a.from = a.to;
+      a.to = a.path.shift();
+      a.t = 0;
+      a.dur = travelTime(map, a.from, a.to);
+      keep.push(a);
     }
     state.armies = keep;
 
-    // Éliminations / victoire
+    // Éliminations / victoire / statistiques
     const has = new Array(state.players.length).fill(false);
-    for (const t of state.territories) if (t.owner >= 0) has[t.owner] = true;
+    const counts = new Array(state.players.length).fill(0);
+    for (const t of state.territories) if (t.owner >= 0) { has[t.owner] = true; counts[t.owner]++; }
     for (const a of state.armies) has[a.owner] = true;
-    state.players.forEach((p, i) => { if (p.alive && !has[i]) { p.alive = false; p.gold = 0; } });
+    state.players.forEach((p, i) => {
+      if (counts[i] > p.stats.peakTerr) p.stats.peakTerr = counts[i];
+      if (p.alive && !has[i]) { p.alive = false; p.gold = 0; p.stats.outAt = Math.round(state.time); }
+    });
     const alive = state.players.map((p, i) => (p.alive ? i : -1)).filter(i => i >= 0);
-    if (alive.length === 1 && state.players.length > 1) state.winner = alive[0];
-    else if (alive.length === 0) state.winner = -1;
+    if (alive.length <= 1 && state.players.length > 1) {
+      state.winner = alive.length ? alive[0] : -1;
+      recordHistory(state);
+    }
 
     // Bots
     state.players.forEach((p, i) => {
@@ -433,7 +584,10 @@
     if (!mine.length) return;
 
     const incoming = {}; // troupes déjà envoyées par moi vers un territoire
-    for (const a of state.armies) if (a.owner === pi) incoming[a.to] = (incoming[a.to] || 0) + a.n;
+    for (const a of state.armies) if (a.owner === pi) {
+      const dest = a.path && a.path.length ? a.path[a.path.length - 1] : a.to;
+      incoming[dest] = (incoming[dest] || 0) + a.n;
+    }
 
     // Joueur dominant : les bots normaux/difficiles le ciblent davantage
     const counts = new Array(state.players.length).fill(0);
@@ -449,16 +603,16 @@
       frontier.push(i);
       for (const n of enemies) {
         const def = T[n].troops;
-        const need = Math.ceil(def * CFG.DEF_BONUS * margin) + 2 - (incoming[n] || 0);
-        let score = map.terr[n].income * 3 - def * 0.25;
+        const need = Math.ceil(def * defenseOf(state, map, n) * margin) + 2 - (incoming[n] || 0);
+        let score = map.terr[n].income * 3 + TERRAIN[map.terr[n].terrain].income * 2 - def * 0.25;
         if (T[n].owner === -1) score += 1;
         else if (T[n].owner === leader && level !== 'easy') score += 2;
-        if (state.players[T[n].owner] && state.players[T[n].owner].capital === n) score += 3;
+        if (T[n].owner >= 0 && state.players[T[n].owner].capital === n) score += 3 + state.players[T[n].owner].gold / 100;
         options.push({ from: i, to: n, need, score });
       }
     }
 
-    // 1. Attaques
+    // 1. Attaques (le territoire de départ garde toujours 1 soldat)
     options.sort((a, b) => b.score - a.score);
     const used = new Set();
     let attacks = 0;
@@ -466,20 +620,30 @@
     for (const o of options) {
       if (attacks >= maxAttacks) break;
       if (used.has(o.to) || o.need <= 0) continue;
-      if (T[o.from].troops >= o.need) {
+      if (T[o.from].troops - 1 >= o.need) {
         applyAction(state, map, pi, { type: 'send', from: o.from, to: o.to, n: o.need });
         used.add(o.to);
         attacks++;
       }
     }
 
-    // 2. Achats : compléter l'attaque la plus rentable, sinon défendre
+    // 2. Bâtiments : une mine à l'arrière quand on est riche, un fort sur la capitale menacée
+    if (state.opts.buildings && level !== 'easy' && p.gold > 140 && srand(state) < 0.35) {
+      const interior = mine.filter(i => !T[i].building && !frontier.includes(i));
+      if (p.capital != null && T[p.capital].owner === pi && !T[p.capital].building && frontier.includes(p.capital)) {
+        applyAction(state, map, pi, { type: 'build', t: p.capital, kind: 'fort' });
+      } else if (interior.length) {
+        applyAction(state, map, pi, { type: 'build', t: interior[Math.floor(srand(state) * interior.length)], kind: srand(state) < 0.7 ? 'mine' : 'barracks' });
+      }
+    }
+
+    // 3. Achats : compléter l'attaque la plus rentable, sinon défendre
     const affordable = Math.floor(p.gold / CFG.SOLDIER_COST);
     if (affordable > 0) {
       let target = null, bestVal = -Infinity;
       for (const o of options) {
         if (used.has(o.to)) continue;
-        const deficit = o.need - T[o.from].troops;
+        const deficit = o.need - (T[o.from].troops - 1);
         if (deficit <= 0 || deficit > affordable + 4) continue;
         const v = o.score - deficit * 0.3;
         if (v > bestVal) { bestVal = v; target = o; }
@@ -488,19 +652,19 @@
       for (const i of frontier) {
         let enemy = 0;
         for (const n of map.terr[i].neighbors) if (T[n].owner >= 0 && T[n].owner !== pi) enemy = Math.max(enemy, T[n].troops);
-        const th = enemy - T[i].troops * CFG.DEF_BONUS;
+        const th = enemy - T[i].troops * defenseOf(state, map, i);
         if (th > threat) { threat = th; threatT = i; }
       }
       if (threatT >= 0 && (level !== 'easy') && threat > 3 && (!target || threat > 8)) {
-        applyAction(state, map, pi, { type: 'buy', t: threatT, n: Math.min(affordable, Math.ceil(threat / CFG.DEF_BONUS) + 2) });
+        applyAction(state, map, pi, { type: 'buy', t: threatT, n: Math.min(affordable, Math.ceil(threat / defenseOf(state, map, threatT)) + 2) });
       } else if (target) {
-        applyAction(state, map, pi, { type: 'buy', t: target.from, n: Math.min(affordable, target.need - T[target.from].troops) });
+        applyAction(state, map, pi, { type: 'buy', t: target.from, n: Math.min(affordable, target.need - (T[target.from].troops - 1)) });
       } else if (frontier.length && affordable >= 3) {
         applyAction(state, map, pi, { type: 'buy', t: frontier[Math.floor(srand(state) * frontier.length)], n: affordable });
       }
     }
 
-    // 3. Les territoires intérieurs envoient leurs troupes vers le front
+    // 4. Les territoires intérieurs envoient leurs troupes vers le front
     if (frontier.length) {
       const fd = new Array(T.length).fill(Infinity);
       const q = frontier.slice();
@@ -509,13 +673,13 @@
         for (const n of map.terr[q[k]].neighbors) if (T[n].owner === pi && fd[n] === Infinity) { fd[n] = fd[q[k]] + 1; q.push(n); }
       }
       for (const i of mine) {
-        if (fd[i] === 0 || T[i].troops < 2) continue;
+        if (fd[i] === 0 || T[i].troops < 3) continue;
         let best = -1;
         for (const n of map.terr[i].neighbors) if (T[n].owner === pi && fd[n] < fd[i]) { best = n; break; }
-        if (best >= 0) applyAction(state, map, pi, { type: 'send', from: i, to: best, n: T[i].troops });
+        if (best >= 0) applyAction(state, map, pi, { type: 'send', from: i, to: best, n: T[i].troops - 1 });
       }
     }
   }
 
-  return { CFG, COLORS, generateMap, createGame, applyAction, step, incomeOf, travelTime, findPath, legPos, crossingPoint };
+  return { CFG, COLORS, TERRAIN, BUILDINGS, SIZES, resolveOpts, generateMap, createGame, applyAction, step, incomeOf, defenseOf, travelTime, findPath, legPos, crossingPoint };
 });

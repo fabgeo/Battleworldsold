@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Battleworlds</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -13,6 +13,18 @@
       <h1>Battleworlds</h1>
       <p class="sub">Conquête de territoires</p>
       <label>Ton nom <input id="name" maxlength="16" placeholder="Joueur"></label>
+
+      <details id="settings">
+        <summary>Réglages de la partie <small id="settingsSummary"></small></summary>
+        <div class="settings-grid">
+          <label>Carte <select id="optMap"><option value="random">Aléatoire</option><option value="europe">Europe</option></select></label>
+          <label>Taille <select id="optSize"><option value="auto">Auto</option><option value="small">Petite (30)</option><option value="medium">Moyenne (45)</option><option value="large">Grande (65)</option></select></label>
+          <label>Vitesse <select id="optSpeed"><option value="0.75">Lente</option><option value="1">Normale</option><option value="1.5">Rapide</option></select></label>
+          <label>Or de départ <select id="optGold"><option value="auto">Auto (25)</option><option value="0">0</option><option value="100">100</option><option value="300">300</option></select></label>
+          <label>Bâtiments <select id="optBuild"><option value="on">Oui (test)</option><option value="off">Non</option></select></label>
+        </div>
+        <button id="btnResetOpts" class="link">Tout remettre en auto</button>
+      </details>
 
       <h2>Solo contre des bots</h2>
       <div class="row">
@@ -38,6 +50,7 @@
     <div class="card">
       <h2>Salon <span id="lobbyCode" class="code"></span></h2>
       <p class="sub">Donne ce code (ou le lien) à tes amis pour qu'ils rejoignent.</p>
+      <p class="sub" id="lobbyOpts"></p>
       <ul id="lobbyPlayers"></ul>
       <div id="hostControls">
         <div class="row">
@@ -56,8 +69,9 @@
     <canvas id="canvas"></canvas>
     <div id="topbar">
       <div class="tb-actions">
-        <button id="btnQuit">Quitter</button>
-        <button id="btnRestart">Recommencer</button>
+        <button id="btnQuit" title="Quitter"><span class="ico">✕</span><span class="lbl">Quitter</span></button>
+        <button id="btnRestart" title="Recommencer"><span class="ico">↻</span><span class="lbl">Recommencer</span></button>
+        <button id="btnPause" title="Pause"><span class="ico">❚❚</span><span class="lbl">Pause</span></button>
       </div>
       <div id="hud">
         <div class="stat"><span>Or</span><b id="hudGold">0</b></div>
@@ -67,18 +81,45 @@
       </div>
     </div>
     <div id="scoreboard"></div>
+    <div id="buildMenu" class="hidden">
+      <button data-build="fort"><b>Fort</b><small>Défense ×1,5</small><i></i></button>
+      <button data-build="mine"><b>Mine</b><small>+2 or/s</small><i></i></button>
+      <button data-build="barracks"><b>Caserne</b><small>+1 soldat / 3 s</small><i></i></button>
+    </div>
     <div id="bottombar">
       <div id="pSel"><b id="pName">Aucune sélection</b><small id="pInfo">Clique sur un de tes territoires</small></div>
       <div class="group"><span>Achat <small id="pCost"></small></span>
-        <button data-buy="1">+1</button><button data-buy="5">+5</button><button data-buy="10">+10</button><button data-buy="max">Max</button>
+        <button data-buy="1">+1</button><button data-buy="5">+5</button><button data-buy="10" class="wide-only">+10</button><button data-buy="max">Max</button>
+        <button id="btnBuild">Bâtir</button>
       </div>
       <div class="group"><span>Envoi</span>
         <button data-pct="25">25%</button><button data-pct="50">50%</button><button data-pct="75">75%</button><button data-pct="100">100%</button>
       </div>
     </div>
-    <div id="overlay" class="hidden"><div class="card"><h2 id="overTitle"></h2><button id="btnMenu" class="primary">Retour au menu</button></div></div>
+    <div id="pauseOverlay" class="overlay hidden"><div class="card"><h2>Pause</h2><button id="btnResume" class="primary">Reprendre</button></div></div>
+    <div id="overlay" class="overlay hidden">
+      <div class="card wide">
+        <h2 id="overTitle"></h2>
+        <p class="sub" id="overSub"></p>
+        <div id="statsBlock">
+          <div class="chart-wrap">
+            <div class="chart-title">Territoires au fil de la partie</div>
+            <canvas id="statsChart"></canvas>
+            <div id="chartTip" class="hidden"></div>
+          </div>
+          <div class="table-wrap"><table id="statsTable"></table></div>
+          <p class="sub" id="bigBattle"></p>
+        </div>
+        <div class="row">
+          <button id="btnWatch">Continuer à regarder</button>
+          <button id="btnAgain">Rejouer</button>
+          <button id="btnMenu" class="primary">Retour au menu</button>
+        </div>
+      </div>
+    </div>
   </section>
 
+  <script src="/shared/europe-map.js"></script>
   <script src="/shared/engine.js"></script>
   <script src="client.js"></script>
 </body>

@@ -53,16 +53,17 @@ function broadcast(room, event, data) {
 }
 
 function lobbyInfo(room) {
-  return { code: room.code, host: room.host, players: room.players.map(p => ({ id: p.id, name: p.name, bot: p.bot })), started: !!room.game };
+  return { code: room.code, host: room.host, opts: room.opts, players: room.players.map(p => ({ id: p.id, name: p.name, bot: p.bot })), started: !!room.game };
 }
 
 function startGame(room) {
   const seed = Math.floor(Math.random() * 2 ** 31);
-  const map = Engine.generateMap(seed);
   const players = room.players.map(p => ({ id: p.id, name: p.name, bot: p.bot }));
-  const state = Engine.createGame(map, players, seed ^ 0x5bd1e995);
-  room.game = { seed, map, state };
-  broadcast(room, 'start', { seed, players });
+  const opts = Engine.resolveOpts(room.opts, players.length);
+  const map = Engine.generateMap(seed, opts);
+  const state = Engine.createGame(map, players, seed ^ 0x5bd1e995, opts);
+  room.game = { seed, map, state, opts };
+  broadcast(room, 'start', { seed, players, opts });
   room.timer = setInterval(() => {
     Engine.step(state, map, TICK);
     broadcast(room, 'state', state);
@@ -77,7 +78,9 @@ async function api(req, res, route) {
   if (route === 'create') {
     const code = newCode();
     const id = crypto.randomUUID(), token = crypto.randomUUID();
-    const room = { code, host: id, players: [{ id, name, bot: false, token }], clients: [], game: null, timer: null, lastActive: Date.now() };
+    const o = body.opts || {};
+    const opts = { map: o.map, size: o.size, speed: o.speed, startGold: o.startGold, buildings: o.buildings };
+    const room = { code, host: id, opts, players: [{ id, name, bot: false, token }], clients: [], game: null, timer: null, lastActive: Date.now() };
     rooms.set(code, room);
     return json(res, 200, { code, id, token });
   }
@@ -105,7 +108,7 @@ async function api(req, res, route) {
     room.clients.push(client);
     send(client, 'lobby', lobbyInfo(room));
     if (room.game) {
-      send(client, 'start', { seed: room.game.seed, players: room.players.map(p => ({ id: p.id, name: p.name, bot: p.bot })) });
+      send(client, 'start', { seed: room.game.seed, players: room.players.map(p => ({ id: p.id, name: p.name, bot: p.bot })), opts: room.game.opts });
       send(client, 'state', room.game.state);
     }
     const ping = setInterval(() => res.write(': ping\n\n'), 20000);

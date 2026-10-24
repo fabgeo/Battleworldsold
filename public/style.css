@@ -44,8 +44,45 @@ button.active { background: #2f7de1; }
 #bottombar .group > span { color: #9aa5b1; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-right: 2px; }
 #bottombar button { height: 56px; min-width: 64px; padding: 0 14px; font-size: 18px; font-weight: 600; border-radius: 8px; font-variant-numeric: tabular-nums; }
 #bottombar button:disabled { opacity: 0.35; cursor: default; background: #3a434e; }
-#overlay { position: absolute; inset: 0; background: #0008; display: flex; align-items: center; justify-content: center; padding: 16px; }
-#overlay h2 { font-size: 24px; text-align: center; margin-top: 0; }
+/* Réglages */
+details#settings { margin-top: 16px; background: #232930; border-radius: 8px; padding: 10px 12px; }
+details#settings summary { cursor: pointer; font-weight: 600; }
+details#settings summary small { color: #9aa5b1; font-weight: 400; margin-left: 6px; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }
+button.link { background: none; color: #7fb2f0; padding: 6px 0; font-size: 13px; }
+button.link:hover { background: none; text-decoration: underline; }
+
+/* Barre du haut : libellés masqués sur téléphone */
+.tb-actions .ico { display: none; }
+
+/* Menu de construction */
+#buildMenu { position: absolute; bottom: 92px; right: max(10px, env(safe-area-inset-right, 0px)); display: flex; gap: 6px; background: #1d2228f5; border: 1px solid #3a434e; border-radius: 10px; padding: 8px; max-width: calc(100% - 20px); }
+#buildMenu button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; min-width: 110px; text-align: left; }
+#buildMenu button small { color: #c9d1d9; font-size: 12px; }
+#buildMenu button i { font-style: normal; color: #ffd84a; font-size: 13px; font-variant-numeric: tabular-nums; }
+#buildMenu button:disabled { opacity: 0.4; cursor: default; }
+#btnBuild.active { background: #2f7de1; }
+
+/* Overlays (pause, fin de partie) */
+.overlay { position: absolute; inset: 0; background: #000a; display: flex; align-items: center; justify-content: center; padding: 16px; overflow: auto; }
+.overlay h2 { font-size: 24px; text-align: center; margin-top: 0; }
+.overlay .card { max-height: 100%; overflow: auto; }
+.card.wide { max-width: 720px; }
+.overlay .row { justify-content: center; }
+.chart-wrap { position: relative; margin: 8px 0 14px; }
+.chart-title { font-size: 13px; color: #9aa5b1; margin-bottom: 6px; }
+#statsChart { width: 100%; height: 190px; display: block; }
+#chartTip { position: absolute; pointer-events: none; background: #1d2228; border: 1px solid #444d58; border-radius: 6px; padding: 6px 8px; font-size: 12px; white-space: nowrap; }
+#chartTip div { display: flex; gap: 6px; align-items: center; }
+#chartTip .sw { width: 10px; height: 2px; display: inline-block; }
+.table-wrap { overflow-x: auto; }
+#statsTable { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+#statsTable th, #statsTable td { padding: 6px 8px; text-align: right; border-bottom: 1px solid #3a434e; white-space: nowrap; }
+#statsTable th { color: #9aa5b1; font-weight: 500; font-size: 12px; }
+#statsTable th:first-child, #statsTable td:first-child { text-align: left; }
+#statsTable .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+#statsTable tr.win td { font-weight: 700; }
+
 @media (max-width: 700px) {
   #topbar { gap: 8px; }
   #hud { gap: 8px; }
@@ -59,4 +96,10 @@ button.active { background: #2f7de1; }
   #bottombar button { height: 56px; padding: 0 4px; font-size: 14px; min-width: 34px; }
   #pSel { min-width: 50px; font-size: 13px; }
   #pSel small { font-size: 11px; }
+  .tb-actions .ico { display: inline; }
+  .tb-actions .lbl { display: none; }
+  .tb-actions button { min-width: 38px; }
+  .wide-only { display: none; }
+  #buildMenu { left: 10px; right: 10px; }
+  #buildMenu button { min-width: 0; flex: 1; padding: 8px; }
 }
