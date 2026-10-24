@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Battleworlds</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Menu -->
+  <section id="menu" class="screen">
+    <div class="card">
+      <h1>Battleworlds</h1>
+      <p class="sub">Conquête de territoires</p>
+      <label>Ton nom <input id="name" maxlength="16" placeholder="Joueur"></label>
+
+      <h2>Solo contre des bots</h2>
+      <div class="row">
+        <label>Bots <select id="botCount"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>7</option></select></label>
+        <label>Niveau <select id="botLevel"><option value="easy">Facile</option><option value="normal" selected>Normal</option><option value="hard">Difficile</option></select></label>
+      </div>
+      <button id="btnSolo" class="primary">Jouer en solo</button>
+
+      <h2>Multijoueur</h2>
+      <button id="btnCreate">Créer une partie</button>
+      <div class="row">
+        <input id="joinCode" placeholder="CODE" maxlength="5">
+        <button id="btnJoin">Rejoindre</button>
+      </div>
+      <p id="menuError" class="error"></p>
+    </div>
+  </section>
+
+  <!-- Salon -->
+  <section id="lobby" class="screen hidden">
+    <div class="card">
+      <h2>Salon <span id="lobbyCode" class="code"></span></h2>
+      <p class="sub">Donne ce code (ou le lien) à tes amis pour qu'ils rejoignent.</p>
+      <ul id="lobbyPlayers"></ul>
+      <div id="hostControls">
+        <div class="row">
+          <select id="lobbyBotLevel"><option value="easy">Facile</option><option value="normal" selected>Normal</option><option value="hard">Difficile</option></select>
+          <button id="btnAddBot">+ Ajouter un bot</button>
+        </div>
+        <button id="btnStart" class="primary">Lancer la partie</button>
+      </div>
+      <p id="lobbyWait" class="sub">En attente de l'hôte…</p>
+      <p id="lobbyError" class="error"></p>
+    </div>
+  </section>
+
+  <!-- Jeu -->
+  <section id="game" class="hidden">
+    <canvas id="canvas"></canvas>
+    <div id="hud">
+      <div class="stat"><span>Or</span><b id="hudGold">0</b></div>
+      <div class="stat"><span>Revenu</span><b id="hudIncome">+0/s</b></div>
+      <div class="stat"><span>Territoires</span><b id="hudTerr">0</b></div>
+      <div class="stat"><span>Soldats</span><b id="hudTroops">0</b></div>
+      <div class="stat"><span>Envoi</span><b id="hudPct">50%</b></div>
+    </div>
+    <div id="scoreboard"></div>
+    <div id="panel" class="hidden">
+      <div class="ptitle"><span id="pName"></span><small id="pInfo"></small></div>
+      <div class="row buy">
+        <span>Acheter (<span id="pCost"></span> or) :</span>
+        <button data-buy="1">+1</button><button data-buy="5">+5</button><button data-buy="10">+10</button><button data-buy="max">Max</button>
+      </div>
+      <div class="row pct">
+        <span>Troupes envoyées :</span>
+        <button data-pct="25">25%</button><button data-pct="50">50%</button><button data-pct="75">75%</button><button data-pct="100">100%</button>
+      </div>
+    </div>
+    <div id="help">Clic sur ton territoire = sélection · clic sur un voisin = envoyer des troupes · <b>B</b> acheter max · <b>1-4</b> % envoi · clic droit/Échap = désélection</div>
+    <div id="overlay" class="hidden"><div class="card"><h2 id="overTitle"></h2><button id="btnMenu" class="primary">Retour au menu</button></div></div>
+  </section>
+
+  <script src="/shared/engine.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
