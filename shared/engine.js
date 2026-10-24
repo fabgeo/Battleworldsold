@@ -188,7 +188,30 @@
       t.neighbors = Array.from(t.neighbors).sort((a, b) => a - b);
       delete t.sx; delete t.sy;
     }
-    return { seed, w: W, h: H, cells, terr, segments };
+
+    // Point de passage sur la frontière commune de chaque paire de voisins :
+    // les troupes passent par là, sans traverser un autre territoire
+    const crossing = {};
+    const bestC = {};
+    const outside = (x0, y0, x1, y1, a, b) => { // nombre de points du segment hors des territoires a et b
+      const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 2);
+      let bad = 0;
+      for (let i = 1; i < n; i++) {
+        const x = Math.min(W - 1, Math.floor(x0 + (x1 - x0) * i / n)), y = Math.min(H - 1, Math.floor(y0 + (y1 - y0) * i / n));
+        const c = cells[y * W + x];
+        if (c !== a && c !== b) bad++;
+      }
+      return bad;
+    };
+    for (const [x1, y1, x2, y2, a, b] of segments) {
+      const k = a < b ? a + '-' + b : b + '-' + a;
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      const A = terr[a], B = terr[b];
+      const len = Math.hypot(A.lx - mx, A.ly - my) + Math.hypot(B.lx - mx, B.ly - my);
+      const score = len + 100 * (outside(A.lx, A.ly, mx, my, a, b) + outside(mx, my, B.lx, B.ly, a, b));
+      if (bestC[k] === undefined || score < bestC[k]) { bestC[k] = score; crossing[k] = [mx, my]; }
+    }
+    return { seed, w: W, h: H, cells, terr, segments, crossing };
   }
 
   // Distances en sauts dans le graphe
@@ -249,9 +272,23 @@
     return inc;
   }
 
+  function crossingPoint(map, a, b) {
+    return map.crossing[a < b ? a + '-' + b : b + '-' + a];
+  }
+
   function travelTime(map, a, b) {
-    const A = map.terr[a], B = map.terr[b];
-    return Math.hypot(A.lx - B.lx, A.ly - B.ly) / CFG.ARMY_SPEED + 0.3;
+    const A = map.terr[a], B = map.terr[b], P = crossingPoint(map, a, b);
+    return (Math.hypot(A.lx - P[0], A.ly - P[1]) + Math.hypot(P[0] - B.lx, P[1] - B.ly)) / CFG.ARMY_SPEED + 0.3;
+  }
+
+  // Position (en cases) d'une armée sur le trajet a -> frontière -> b, k entre 0 et 1
+  function legPos(map, a, b, k) {
+    const A = map.terr[a], B = map.terr[b], P = crossingPoint(map, a, b);
+    const d1 = Math.hypot(A.lx - P[0], A.ly - P[1]), d2 = Math.hypot(P[0] - B.lx, P[1] - B.ly);
+    const d = k * (d1 + d2);
+    if (d <= d1) { const f = d1 ? d / d1 : 0; return [A.lx + (P[0] - A.lx) * f, A.ly + (P[1] - A.ly) * f]; }
+    const f = d2 ? (d - d1) / d2 : 1;
+    return [P[0] + (B.lx - P[0]) * f, P[1] + (B.ly - P[1]) * f];
   }
 
   // Chemin le plus court de `from` vers `to` en ne traversant que des territoires du joueur.
@@ -480,5 +517,5 @@
     }
   }
 
-  return { CFG, COLORS, generateMap, createGame, applyAction, step, incomeOf, travelTime, findPath };
+  return { CFG, COLORS, generateMap, createGame, applyAction, step, incomeOf, travelTime, findPath, legPos, crossingPoint };
 });

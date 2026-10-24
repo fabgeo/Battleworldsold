@@ -36,13 +36,13 @@ button.active { background: #2f7de1; }
 #scoreboard div { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
 #scoreboard .dead { opacity: 0.4; text-decoration: line-through; }
 #scoreboard .n { margin-left: auto; color: #9aa5b1; padding-left: 10px; }
-#bottombar { position: absolute; bottom: 0; left: 0; right: 0; height: 58px; display: flex; align-items: center; gap: 18px; padding: 0 max(10px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(10px, env(safe-area-inset-left, 0px)); background: #1d2228f0; border-top: 1px solid #3a434e; overflow-x: auto; white-space: nowrap; }
+#bottombar { position: absolute; bottom: 0; left: 0; right: 0; height: 84px; display: flex; align-items: center; gap: 18px; padding: 0 max(10px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(10px, env(safe-area-inset-left, 0px)); background: #1d2228f0; border-top: 1px solid #3a434e; overflow-x: auto; white-space: nowrap; }
 #pSel { display: flex; flex-direction: column; min-width: 0; flex: 1; overflow: hidden; }
 #pSel b, #pSel small { overflow: hidden; text-overflow: ellipsis; }
 #pSel small { color: #9aa5b1; font-size: 12px; }
-#bottombar .group { display: flex; align-items: center; gap: 5px; flex: none; }
+#bottombar .group { display: flex; align-items: center; gap: 6px; flex: none; }
 #bottombar .group > span { color: #9aa5b1; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-right: 2px; }
-#bottombar button { padding: 7px 11px; font-variant-numeric: tabular-nums; }
+#bottombar button { height: 56px; min-width: 64px; padding: 0 14px; font-size: 18px; font-weight: 600; border-radius: 8px; font-variant-numeric: tabular-nums; }
 #bottombar button:disabled { opacity: 0.35; cursor: default; background: #3a434e; }
 #overlay { position: absolute; inset: 0; background: #0008; display: flex; align-items: center; justify-content: center; padding: 16px; }
 #overlay h2 { font-size: 24px; text-align: center; margin-top: 0; }
@@ -56,7 +56,7 @@ button.active { background: #2f7de1; }
   #bottombar { gap: 8px; }
   #bottombar .group { gap: 3px; }
   #bottombar .group > span { display: none; }
-  #bottombar button { padding: 7px 5px; font-size: 12px; min-width: 32px; }
+  #bottombar button { height: 56px; padding: 0 4px; font-size: 14px; min-width: 34px; }
   #pSel { min-width: 50px; font-size: 13px; }
   #pSel small { font-size: 11px; }
 }

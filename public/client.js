@@ -199,7 +199,7 @@
 
   // ---------- Vue ----------
   let DPR = 1;
-  const BAR_TOP = 50, BAR_BOT = 58;
+  const BAR_TOP = 50, BAR_BOT = 84;
   function resize() {
     DPR = window.devicePixelRatio || 1;
     canvas.width = canvas.clientWidth * DPR;
@@ -452,13 +452,19 @@
     // Armées en mouvement
     const extra = G.mode === 'multi' ? Math.min(0.15, (performance.now() - G.lastStateAt) / 1000) : 0;
     for (const a of st.armies) {
-      const A = m.terr[a.from], B = m.terr[a.to];
       const k = Math.min(1, (a.t + extra) / a.dur);
-      const [x, y] = toScreen(A.lx + (B.lx - A.lx) * k, A.ly + (B.ly - A.ly) * k);
+      const [x, y] = toScreen(...E.legPos(m, a.from, a.to, k));
       if (a.owner === G.me) {
         ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2 * DPR; ctx.setLineDash([5 * DPR, 5 * DPR]);
         ctx.beginPath(); ctx.moveTo(x, y);
-        for (const w of [a.to].concat(a.path || [])) ctx.lineTo(...toScreen(m.terr[w].lx, m.terr[w].ly));
+        // Reste du trajet : frontière de l'étape en cours (si pas encore franchie), puis chaque étape suivante
+        let prev = a.from;
+        for (const w of [a.to].concat(a.path || [])) {
+          const P = E.crossingPoint(m, prev, w);
+          if (w !== a.to || k < 0.5) ctx.lineTo(...toScreen(P[0], P[1]));
+          ctx.lineTo(...toScreen(m.terr[w].lx, m.terr[w].ly));
+          prev = w;
+        }
         ctx.stroke(); ctx.setLineDash([]);
       }
       const r = R * 0.75;
