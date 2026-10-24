@@ -44,7 +44,9 @@
 
   // ---------- Multi ----------
   async function post(route, body) {
-    const r = await fetch('/api/' + route, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    let r;
+    try { r = await fetch('/api/' + route, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+    catch (e) { throw new Error('Serveur injoignable : le multijoueur nécessite le serveur (npm start).'); }
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.error || 'Erreur');
     return data;
