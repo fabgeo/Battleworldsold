@@ -15,6 +15,8 @@
     ARMY_SPEED: 12,        // cases par seconde sur plaine
     FATIGUE: 0.05,         // perte par étape au-delà des étapes gratuites
     FREE_LEGS: 2,
+    INCOME_EVERY: 2,       // secondes entre deux versements d'or
+    SEA_SLOW: 2,           // un passage maritime est 2 fois plus lent
     BARRACKS_EVERY: 3,     // secondes entre deux soldats produits par une caserne
     HISTORY_EVERY: 5,      // secondes entre deux points des statistiques
     BOT_THINK: { easy: 2.6, normal: 1.6, hard: 0.9 },
@@ -29,7 +31,7 @@
 
   const BUILDINGS = {
     fort: { name: 'Fort', cost: 60, desc: 'Défense ×1,5', letter: 'F' },
-    mine: { name: 'Mine', cost: 50, desc: '+2 or/s', letter: 'M' },
+    mine: { name: 'Mine', cost: 50, desc: '+2 or par versement', letter: 'M' },
     barracks: { name: 'Caserne', cost: 80, desc: '+1 soldat / 3 s', letter: 'C' },
   };
 
@@ -308,7 +310,7 @@
     opts = resolveOpts(opts, players.length);
     const state = {
       time: 0, rng: seed | 0, incomeAcc: 0, sec: 0, nextArmy: 1, winner: null, opts,
-      territories: map.terr.map(() => ({ owner: -1, troops: 0, building: null })),
+      territories: map.terr.map(() => ({ owner: -1, troops: 0, buildings: [] })),
       players: [], armies: [], history: [], bigBattle: null,
     };
     for (let i = 0; i < map.terr.length; i++) {
@@ -358,7 +360,7 @@
     state.territories.forEach((t, i) => {
       if (t.owner !== pi) return;
       inc += map.terr[i].income + TERRAIN[map.terr[i].terrain].income;
-      if (t.building === 'mine') inc += 2;
+      if (t.buildings.includes('mine')) inc += 2;
     });
     if (state.players[pi].capital != null && state.territories[state.players[pi].capital].owner === pi) inc += CFG.CAPITAL_BONUS;
     return inc;
@@ -366,18 +368,24 @@
 
   // Multiplicateur de défense d'un territoire (terrain + fort)
   function defenseOf(state, map, i) {
-    return CFG.DEF_BONUS * TERRAIN[map.terr[i].terrain].def * (state.territories[i].building === 'fort' ? 1.5 : 1);
+    return CFG.DEF_BONUS * TERRAIN[map.terr[i].terrain].def * (state.territories[i].buildings.includes('fort') ? 1.5 : 1);
   }
 
   function crossingPoint(map, a, b) {
     return map.crossing[a < b ? a + '-' + b : b + '-' + a];
   }
 
-  // Durée d'une étape : moitié du trajet au rythme du terrain de départ, moitié au rythme de l'arrivée
+  function isSea(map, a, b) {
+    return map.terr[a].sea.includes(b);
+  }
+
+  // Durée d'une étape : moitié du trajet au rythme du terrain de départ, moitié au rythme de l'arrivée,
+  // et 2 fois plus lent par la mer
   function travelTime(map, a, b) {
     const A = map.terr[a], B = map.terr[b], P = crossingPoint(map, a, b);
     const d1 = Math.hypot(A.lx - P[0], A.ly - P[1]), d2 = Math.hypot(P[0] - B.lx, P[1] - B.ly);
-    return (d1 / TERRAIN[A.terrain].speed + d2 / TERRAIN[B.terrain].speed) / CFG.ARMY_SPEED + 0.3;
+    const t = (d1 / TERRAIN[A.terrain].speed + d2 / TERRAIN[B.terrain].speed) / CFG.ARMY_SPEED;
+    return t * (isSea(map, a, b) ? CFG.SEA_SLOW : 1) + 0.3;
   }
 
   // Position (en cases) d'une armée sur le trajet a -> frontière -> b, k entre 0 et 1 (temps écoulé)
@@ -435,9 +443,10 @@
     }
     if (act.type === 'build') {
       const t = state.territories[act.t], b = BUILDINGS[act.kind];
-      if (!state.opts.buildings || !t || !b || t.owner !== pi || t.building || p.gold < b.cost) return false;
+      // plusieurs bâtiments par territoire, mais un seul de chaque type
+      if (!state.opts.buildings || !t || !b || t.owner !== pi || t.buildings.includes(act.kind) || p.gold < b.cost) return false;
       p.gold -= b.cost;
-      t.building = act.kind;
+      t.buildings.push(act.kind);
       p.stats.built++;
       return true;
     }
@@ -517,8 +526,8 @@
     while (state.incomeAcc >= 1) {
       state.incomeAcc -= 1;
       state.sec++;
-      state.players.forEach((p, i) => { if (p.alive) p.gold += incomeOf(state, map, i); });
-      if (state.sec % CFG.BARRACKS_EVERY === 0) for (const t of state.territories) if (t.building === 'barracks' && t.owner >= 0) t.troops++;
+      if (state.sec % CFG.INCOME_EVERY === 0) state.players.forEach((p, i) => { if (p.alive) p.gold += incomeOf(state, map, i); });
+      if (state.sec % CFG.BARRACKS_EVERY === 0) for (const t of state.territories) if (t.owner >= 0 && t.buildings.includes('barracks')) t.troops++;
       if (state.sec % CFG.HISTORY_EVERY === 0) recordHistory(state);
     }
 
@@ -629,11 +638,12 @@
 
     // 2. Bâtiments : une mine à l'arrière quand on est riche, un fort sur la capitale menacée
     if (state.opts.buildings && level !== 'easy' && p.gold > 140 && srand(state) < 0.35) {
-      const interior = mine.filter(i => !T[i].building && !frontier.includes(i));
-      if (p.capital != null && T[p.capital].owner === pi && !T[p.capital].building && frontier.includes(p.capital)) {
+      const kind = srand(state) < 0.7 ? 'mine' : 'barracks';
+      const interior = mine.filter(i => !T[i].buildings.includes(kind) && !frontier.includes(i));
+      if (p.capital != null && T[p.capital].owner === pi && !T[p.capital].buildings.includes('fort') && frontier.includes(p.capital)) {
         applyAction(state, map, pi, { type: 'build', t: p.capital, kind: 'fort' });
       } else if (interior.length) {
-        applyAction(state, map, pi, { type: 'build', t: interior[Math.floor(srand(state) * interior.length)], kind: srand(state) < 0.7 ? 'mine' : 'barracks' });
+        applyAction(state, map, pi, { type: 'build', t: interior[Math.floor(srand(state) * interior.length)], kind });
       }
     }
 
@@ -681,5 +691,5 @@
     }
   }
 
-  return { CFG, COLORS, TERRAIN, BUILDINGS, SIZES, resolveOpts, generateMap, createGame, applyAction, step, incomeOf, defenseOf, travelTime, findPath, legPos, crossingPoint };
+  return { CFG, COLORS, TERRAIN, BUILDINGS, SIZES, resolveOpts, generateMap, createGame, applyAction, step, incomeOf, defenseOf, travelTime, isSea, findPath, legPos, crossingPoint };
 });

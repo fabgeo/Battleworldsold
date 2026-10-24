@@ -450,6 +450,7 @@
     if (G.selected < 0) return;
     const n = what === 'max' ? Math.floor(G.state.players[G.me].gold / E.CFG.SOLDIER_COST) : +what;
     act({ type: 'buy', t: G.selected, n });
+    G.selected = -1; // après une action, la sélection s'enlève (évite d'envoyer des troupes au clic suivant)
   }
 
   document.querySelectorAll('[data-buy]').forEach(b => b.onclick = () => buy(b.dataset.buy));
@@ -469,7 +470,7 @@
   $('btnBuild').onclick = () => setBuildOpen(!G.buildOpen);
   document.querySelectorAll('[data-build]').forEach(b => {
     b.querySelector('i').textContent = E.BUILDINGS[b.dataset.build].cost + ' or';
-    b.onclick = () => { act({ type: 'build', t: G.selected, kind: b.dataset.build }); setBuildOpen(false); };
+    b.onclick = () => { act({ type: 'build', t: G.selected, kind: b.dataset.build }); setBuildOpen(false); G.selected = -1; };
   });
 
   window.addEventListener('keydown', (e) => {
@@ -586,15 +587,16 @@
       const isCap = t.owner >= 0 && st.players[t.owner].capital === i;
       if (isCap) { ctx.font = font(R * 1.1); ctx.fillStyle = '#ffd84a'; ctx.fillText('★', x, y - r - R * 0.45); }
       ctx.font = font(R * 0.75, 700); ctx.fillStyle = 'rgba(30,25,15,0.85)';
-      const inc = T.income + E.TERRAIN[T.terrain].income + (t.building === 'mine' ? 2 : 0);
+      const inc = T.income + E.TERRAIN[T.terrain].income + (t.buildings.includes('mine') ? 2 : 0);
       ctx.fillText('+' + inc, x, y + r + R * 0.55);
-      if (t.building) {
-        const bx = x + r * 0.95, by = y - r * 0.75, bs = R * 0.9;
+      // un petit badge par bâtiment, empilés à droite de l'étiquette
+      t.buildings.forEach((k, j) => {
+        const bs = R * 0.85, bx = x + r + bs * 0.55, by = y - r * 0.6 + j * (bs + 2 * DPR);
         ctx.fillStyle = '#1d2228'; ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 1.5 * DPR;
         ctx.beginPath(); ctx.rect(bx - bs / 2, by - bs / 2, bs, bs); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#ffd84a'; ctx.font = font(R * 0.7, 700);
-        ctx.fillText(E.BUILDINGS[t.building].letter, bx, by + 1);
-      }
+        ctx.fillStyle = '#ffd84a'; ctx.font = font(R * 0.65, 700);
+        ctx.fillText(E.BUILDINGS[k].letter, bx, by + 1);
+      });
     });
 
     // Armées en mouvement
@@ -629,9 +631,9 @@
     const st = G.state, m = G.map, t = st.territories[i], T = m.terr[i];
     const owner = t.owner >= 0 ? st.players[t.owner].name : 'Neutre';
     const ter = E.TERRAIN[T.terrain].name;
-    const inc = T.income + E.TERRAIN[T.terrain].income + (t.building === 'mine' ? 2 : 0);
-    const bld = t.building ? ' · ' + E.BUILDINGS[t.building].name : '';
-    if (t.owner === G.me) return `${ter}${bld} · ${t.troops} soldats · +${inc} or/s`;
+    const inc = T.income + E.TERRAIN[T.terrain].income + (t.buildings.includes('mine') ? 2 : 0);
+    const bld = t.buildings.length ? ' · ' + t.buildings.map(k => E.BUILDINGS[k].name).join(', ') : '';
+    if (t.owner === G.me) return `${ter}${bld} · ${t.troops} soldats · +${inc} or`;
     const def = E.defenseOf(st, m, i);
     const need = Math.ceil(t.troops * def / 0.85) + 1;
     return `${owner} · ${ter}${bld} · ${t.troops} soldats · défense ×${def.toFixed(1).replace('.', ',')} → ~${need} pour le prendre`;
@@ -644,7 +646,7 @@
     let terr = 0, troops = 0;
     st.territories.forEach(t => { if (t.owner === G.me) { terr++; troops += t.troops; } });
     $('hudGold').textContent = Math.floor(me.gold);
-    $('hudIncome').textContent = '+' + E.incomeOf(st, m, G.me) + '/s';
+    $('hudIncome').textContent = '+' + E.incomeOf(st, m, G.me) + '/' + E.CFG.INCOME_EVERY + 's';
     $('hudTerr').textContent = terr + '/' + m.terr.length;
     $('hudTroops').textContent = troops;
 
@@ -673,10 +675,15 @@
     document.querySelectorAll('[data-buy]').forEach(b => {
       b.disabled = !canBuy || (b.dataset.buy !== 'max' && me.gold < +b.dataset.buy * E.CFG.SOLDIER_COST);
     });
-    const canBuild = own && !st.territories[sel].building;
+    const built = own ? st.territories[sel].buildings : [];
+    const canBuild = own && built.length < Object.keys(E.BUILDINGS).length;
     $('btnBuild').disabled = !canBuild;
     if (!canBuild && G.buildOpen) setBuildOpen(false);
-    document.querySelectorAll('[data-build]').forEach(b => { b.disabled = !canBuild || me.gold < E.BUILDINGS[b.dataset.build].cost; });
+    document.querySelectorAll('[data-build]').forEach(b => {
+      const k = b.dataset.build, has = built.includes(k);
+      b.disabled = !canBuild || has || me.gold < E.BUILDINGS[k].cost;
+      b.querySelector('i').textContent = has ? 'Déjà construit' : E.BUILDINGS[k].cost + ' or';
+    });
 
     // Fin de partie / élimination
     if (st.winner != null && !G.finalShown) showEnd(true);

@@ -15,7 +15,7 @@ ouvrent l'adresse du serveur (ex. `http://<ton-ip>:3000`) et entrent le code de 
 
 - **Cartes** : aléatoire (30 à 65 territoires d'un seul tenant) ou **Europe** (79 régions tirées des vraies frontières,
   îles reliées par des passages maritimes en pointillés).
-- **Revenu** : 5 or/s de base pour chaque joueur, + 1 à 3 par territoire, + 3 pour la capitale (★).
+- **Revenu** : versé toutes les **2 s** : 5 or de base pour chaque joueur, + 1 à 3 par territoire, + 3 pour la capitale (★).
 - Un soldat coûte **5 or** et apparaît sur le territoire choisi.
 - **Terrains** :
 
@@ -26,11 +26,12 @@ ouvrent l'adresse du serveur (ex. `http://<ton-ip>:3000`) et entrent le code de 
   | Montagne | ×1,6 | ×0,5 | — |
   | Ville | ×1,1 | normale | +2 |
 
-- **Bâtiments** (test, désactivables) : Fort 60 or (défense ×1,5), Mine 50 or (+2 or/s), Caserne 80 or (+1 soldat toutes les 3 s).
-  Un seul par territoire ; il reste en place si le territoire change de main.
+- **Bâtiments** (test, désactivables) : Fort 60 or (défense ×1,5), Mine 50 or (+2 or par versement), Caserne 80 or (+1 soldat toutes les 3 s).
+  Un territoire peut avoir les trois (un de chaque type) ; ils restent en place si le territoire change de main.
 - **Envoi de troupes** : depuis un de tes territoires vers n'importe quel territoire. Il reste toujours 1 soldat sur place.
   Le trajet passe de préférence par tes territoires ; un territoire neutre ou ennemi sur le chemin est attaqué :
   si l'armée gagne, elle y laisse 1 soldat et continue. **Fatigue** : -5 % de troupes par étape au-delà de la 2e.
+- Les **passages maritimes** sont 2 fois plus lents que par la terre.
 - Deux armées ennemies qui se croisent sur le même chemin se battent ; les survivants continuent.
 - **Combat** : les défenseurs comptent ×1,2 × terrain × fort, l'attaque a ±15 % d'aléatoire.
 - **Capitale prise** : le vaincu perd la moitié de son or, que le vainqueur récupère.
@@ -48,6 +49,7 @@ Carte, taille, vitesse (lente / normale / rapide), or de départ et bâtiments. 
   À la souris, le trajet prévu s'affiche en pointillés et la barre du bas indique la défense de la cible
   et le nombre de soldats à peu près nécessaire pour la prendre.
 - Glisser-déposer d'un de tes territoires vers une cible : même chose.
+- Après une action (envoi, achat, construction), la sélection s'enlève : le clic suivant sélectionne.
 - Barre du bas : achat (+1, +5, +10, Max), **Bâtir**, et part des troupes envoyées (25 à 100 %).
 - Barre du haut : Quitter, Recommencer, **Pause** (solo), **Plein écran**. En plein écran, la carte prend tout l'écran ;
   téléphone à l'horizontale : boutons en colonnes à gauche et à droite de la carte.
