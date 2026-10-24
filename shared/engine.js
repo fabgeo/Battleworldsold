@@ -254,6 +254,29 @@
     return Math.hypot(A.lx - B.lx, A.ly - B.ly) / CFG.ARMY_SPEED + 0.3;
   }
 
+  // Chemin le plus court de `from` vers `to` en ne traversant que des territoires du joueur.
+  // Retourne la liste des étapes après `from` (la dernière est `to`), ou null.
+  function findPath(state, map, pi, from, to) {
+    if (from === to) return null;
+    const prev = new Array(map.terr.length).fill(-1);
+    prev[from] = from;
+    const q = [from];
+    for (let k = 0; k < q.length; k++) {
+      const c = q[k];
+      for (const n of map.terr[c].neighbors) {
+        if (prev[n] !== -1) continue;
+        prev[n] = c;
+        if (n === to) {
+          const path = [to];
+          for (let x = c; x !== from; x = prev[x]) path.unshift(x);
+          return path;
+        }
+        if (state.territories[n].owner === pi) q.push(n);
+      }
+    }
+    return null;
+  }
+
   // Retourne true si l'action est valide et appliquée
   function applyAction(state, map, pi, act) {
     if (state.winner != null || !act) return false;
@@ -270,11 +293,14 @@
     }
     if (act.type === 'send') {
       const from = state.territories[act.from];
-      if (!from || from.owner !== pi || !map.terr[act.from].neighbors.includes(act.to)) return false;
+      if (!from || from.owner !== pi) return false;
+      const path = findPath(state, map, pi, act.from, act.to);
+      if (!path) return false;
       const n = Math.min(Math.floor(act.n) || 0, from.troops);
       if (n <= 0) return false;
       from.troops -= n;
-      state.armies.push({ id: state.nextArmy++, owner: pi, from: act.from, to: act.to, n, t: 0, dur: travelTime(map, act.from, act.to) });
+      const first = path.shift();
+      state.armies.push({ id: state.nextArmy++, owner: pi, from: act.from, to: first, path, n, t: 0, dur: travelTime(map, act.from, first) });
       return true;
     }
     return false;
@@ -295,6 +321,25 @@
     }
   }
 
+  // Deux armées ennemies sur le même chemin en sens inverse se battent quand elles se croisent
+  function armyClashes(state) {
+    const A = state.armies;
+    for (let i = 0; i < A.length; i++) {
+      const a = A[i];
+      if (a.n <= 0) continue;
+      for (let j = i + 1; j < A.length && a.n > 0; j++) {
+        const b = A[j];
+        if (b.n <= 0 || a.owner === b.owner || a.from !== b.to || a.to !== b.from) continue;
+        if (a.t / a.dur + b.t / b.dur < 1) continue;
+        const r = 0.9 + srand(state) * 0.2;
+        const ea = a.n * r;
+        if (ea > b.n) { a.n = Math.max(1, Math.round((ea - b.n) / r)); b.n = 0; }
+        else if (ea < b.n) { b.n = Math.max(1, Math.round(b.n - ea)); a.n = 0; }
+        else { a.n = 0; b.n = 0; }
+      }
+    }
+  }
+
   function step(state, map, dt) {
     if (state.winner != null) return;
     state.time += dt;
@@ -303,10 +348,20 @@
       state.incomeAcc -= 1;
       state.players.forEach((p, i) => { if (p.alive) p.gold += incomeOf(state, map, i); });
     }
+    for (const a of state.armies) a.t += dt;
+    armyClashes(state);
     const keep = [];
     for (const a of state.armies) {
-      a.t += dt;
-      if (a.t >= a.dur) resolveArrival(state, a); else keep.push(a);
+      if (a.n <= 0) continue;
+      if (a.t < a.dur) { keep.push(a); continue; }
+      // Étape intermédiaire : on continue si le territoire nous appartient toujours
+      if (a.path && a.path.length && state.territories[a.to].owner === a.owner) {
+        a.from = a.to;
+        a.to = a.path.shift();
+        a.t = 0;
+        a.dur = travelTime(map, a.from, a.to);
+        keep.push(a);
+      } else resolveArrival(state, a);
     }
     state.armies = keep;
 
@@ -425,5 +480,5 @@
     }
   }
 
-  return { CFG, COLORS, generateMap, createGame, applyAction, step, incomeOf, travelTime };
+  return { CFG, COLORS, generateMap, createGame, applyAction, step, incomeOf, travelTime, findPath };
 });

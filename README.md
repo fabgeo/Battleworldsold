@@ -16,18 +16,21 @@ ouvrent l'adresse du serveur (ex. `http://<ton-ip>:3000`) et entrent le code de 
 - Carte d'un seul tenant (pas de mer), ~45 territoires générés aléatoirement.
 - Chaque territoire rapporte **+1 à +3 or/s**, la capitale (★) **+3** de plus.
 - Un soldat coûte **5 or** et apparaît sur le territoire choisi.
-- On envoie des troupes uniquement vers un territoire **voisin**.
+- Les troupes se déplacent à travers tes territoires, vers un de tes territoires ou un voisin de ton empire.
+- Deux armées ennemies qui se croisent sur le même chemin se battent ; les survivants continuent.
 - Combat : les défenseurs comptent **×1,2**, l'attaque a ±15 % d'aléatoire.
   Si l'attaque gagne, le territoire est pris avec les survivants.
 - Un joueur sans territoire ni armée en marche est éliminé ; le dernier en vie gagne.
 
 ## Contrôles
 
-- Clic sur ton territoire : sélection. Clic sur un voisin : envoi de troupes.
-  Maj+clic sur un de tes voisins : renfort (un clic simple le sélectionne).
-- Glisser-déposer d'un de tes territoires vers un voisin : envoi de troupes.
-- `B` : acheter le maximum de soldats sur la sélection. `1`–`4` : envoyer 25/50/75/100 %.
-- Molette : zoom. Glisser depuis un territoire qui n'est pas à toi : déplacer la vue.
+- Clic (ou tap) sur ton territoire : sélection. Puis clic sur une cible : envoi de troupes.
+  La cible peut être un de tes territoires (même lointain) ou un territoire voisin de ton empire :
+  les troupes passent par tes territoires pour y aller.
+- Glisser-déposer d'un de tes territoires vers une cible : même chose.
+- Barre du bas : achat de soldats (+1, +5, +10, Max) et part des troupes envoyées (25 à 100 %).
+- `B` : acheter le maximum. `1`–`4` : 25/50/75/100 %. Échap ou clic droit : désélection.
+- Molette ou pincement à deux doigts : zoom de la carte. Glisser depuis un territoire qui n'est pas à toi : déplacer la vue.
 
 ## Structure
 

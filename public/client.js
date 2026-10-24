@@ -228,20 +228,36 @@
   }
 
   // ---------- Entrées ----------
+  // Pointeurs actifs (souris / doigts) : 1 = clic ou glisser, 2 = pincer pour zoomer
+  const pointers = new Map();
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('pointerdown', (e) => {
     if (!G.map) return;
     canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+    if (pointers.size === 2) {
+      const [p1, p2] = [...pointers.values()];
+      G.drag = null;
+      G.pinch = { dist: Math.hypot(p1.x - p2.x, p1.y - p2.y), zoom: G.view.zoom };
+      return;
+    }
     const t = terrAt(e.offsetX, e.offsetY);
     const own = t >= 0 && G.state && G.state.territories[t].owner === G.me;
     G.drag = { x: e.offsetX, y: e.offsetY, button: e.button, from: e.button === 0 && own ? t : -1, moved: false, cx: G.view.cx, cy: G.view.cy };
   });
   canvas.addEventListener('pointermove', (e) => {
     if (!G.map) return;
-    G.hover = terrAt(e.offsetX, e.offsetY);
+    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+    if (G.pinch && pointers.size >= 2) {
+      const [p1, p2] = [...pointers.values()];
+      const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+      zoomAt(mx, my, G.pinch.zoom * Math.hypot(p1.x - p2.x, p1.y - p2.y) / G.pinch.dist);
+      return;
+    }
+    if (e.pointerType === 'mouse') G.hover = terrAt(e.offsetX, e.offsetY);
     const d = G.drag;
     if (!d) return;
-    if (Math.hypot(e.offsetX - d.x, e.offsetY - d.y) > 6) d.moved = true;
+    if (Math.hypot(e.offsetX - d.x, e.offsetY - d.y) > 8) d.moved = true;
     d.ex = e.offsetX; d.ey = e.offsetY;
     if (d.moved && d.from < 0) {
       const s = viewScale() / DPR;
@@ -250,47 +266,81 @@
       clampView();
     }
   });
-  canvas.addEventListener('pointerup', (e) => {
+  function pointerEnd(e) {
+    pointers.delete(e.pointerId);
+    if (G.pinch) { if (pointers.size === 0) G.pinch = null; return; }
     const d = G.drag;
     G.drag = null;
-    if (!d || !G.state) return;
+    if (!d || !G.state || e.type === 'pointercancel') return;
     const t = terrAt(e.offsetX, e.offsetY);
     if (!d.moved) {
       if (d.button === 2) { G.selected = -1; return; }
-      if (d.button === 0) onClick(t, e.shiftKey);
+      if (d.button === 0) onClick(t);
     } else if (d.from >= 0 && t >= 0 && t !== d.from) {
       sendTroops(d.from, t);
-      G.selected = d.from;
     }
-  });
+  }
+  canvas.addEventListener('pointerup', pointerEnd);
+  canvas.addEventListener('pointercancel', pointerEnd);
   canvas.addEventListener('wheel', (e) => {
     if (!G.map) return;
     e.preventDefault();
-    const [mx, my] = toMap(e.offsetX, e.offsetY);
-    G.view.zoom = Math.max(1, Math.min(5, G.view.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
-    const [nx, ny] = toMap(e.offsetX, e.offsetY);
+    zoomAt(e.offsetX, e.offsetY, G.view.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+  }, { passive: false });
+  // Empêche le zoom du navigateur (pincer, Ctrl+molette) pendant la partie : seules la carte zoome, les barres restent en place
+  window.addEventListener('wheel', (e) => { if (e.ctrlKey && G.map) e.preventDefault(); }, { passive: false });
+  for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, (e) => { if (G.map) e.preventDefault(); }, { passive: false });
+  document.addEventListener('touchmove', (e) => { if (G.map && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', (e) => { // pas de zoom au double-tap
+    const now = Date.now();
+    if (G.map && now - lastTouchEnd < 350) e.preventDefault();
+    lastTouchEnd = now;
+  }, { passive: false });
+
+  function zoomAt(sx, sy, zoom) {
+    const [mx, my] = toMap(sx, sy);
+    G.view.zoom = Math.max(1, Math.min(6, zoom));
+    const [nx, ny] = toMap(sx, sy);
     G.view.cx += mx - nx; G.view.cy += my - ny;
     clampView();
-  }, { passive: false });
+  }
   function clampView() {
     G.view.cx = Math.max(0, Math.min(G.map.w, G.view.cx));
     G.view.cy = Math.max(0, Math.min(G.map.h, G.view.cy));
   }
 
-  function onClick(t, shift) {
+  // Territoires atteignables depuis `from` : les miens reliés + leurs voisins
+  function reachable(from) {
+    const st = G.state, m = G.map, out = new Set();
+    if (from < 0 || st.territories[from].owner !== G.me) return out;
+    const seen = new Set([from]), q = [from];
+    for (let k = 0; k < q.length; k++) {
+      for (const n of m.terr[q[k]].neighbors) {
+        if (seen.has(n)) continue;
+        seen.add(n); out.add(n);
+        if (st.territories[n].owner === G.me) q.push(n);
+      }
+    }
+    return out;
+  }
+
+  // Clic : sélectionner un de mes territoires, puis cliquer une cible (à moi ou ennemie) pour y envoyer des troupes
+  function onClick(t) {
     if (t < 0) { G.selected = -1; return; }
     const st = G.state, sel = G.selected;
-    const own = st.territories[t].owner === G.me;
-    if (sel >= 0 && st.territories[sel].owner === G.me && t !== sel && G.map.terr[sel].neighbors.includes(t) && (!own || shift)) {
+    if (t === sel) { G.selected = -1; return; }
+    if (sel >= 0 && st.territories[sel].owner === G.me && reachable(sel).has(t)) {
       sendTroops(sel, t);
+      G.selected = -1;
       return;
     }
-    G.selected = t === sel ? -1 : t;
+    G.selected = t;
   }
 
   function sendTroops(from, to) {
     const t = G.state.territories[from];
-    if (t.owner !== G.me || !G.map.terr[from].neighbors.includes(to)) return;
+    if (t.owner !== G.me) return;
     const n = G.pct >= 1 ? t.troops : Math.max(1, Math.round(t.troops * G.pct));
     if (n > 0) act({ type: 'send', from, to, n });
   }
@@ -359,11 +409,9 @@
     if (G.hover >= 0) { ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fill(G.paths[G.hover].fill); }
     const sel = G.selected;
     if (sel >= 0) {
-      if (st.territories[sel].owner === G.me) {
-        for (const n of m.terr[sel].neighbors) {
-          ctx.fillStyle = st.territories[n].owner === G.me ? 'rgba(255,255,255,0.10)' : 'rgba(255,60,40,0.16)';
-          ctx.fill(G.paths[n].fill);
-        }
+      for (const n of reachable(sel)) {
+        ctx.fillStyle = st.territories[n].owner === G.me ? 'rgba(255,255,255,0.14)' : 'rgba(255,60,40,0.18)';
+        ctx.fill(G.paths[n].fill);
       }
       ctx.lineWidth = 3 / s * DPR;
       ctx.strokeStyle = '#fff';
@@ -407,6 +455,12 @@
       const A = m.terr[a.from], B = m.terr[a.to];
       const k = Math.min(1, (a.t + extra) / a.dur);
       const [x, y] = toScreen(A.lx + (B.lx - A.lx) * k, A.ly + (B.ly - A.ly) * k);
+      if (a.owner === G.me) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2 * DPR; ctx.setLineDash([5 * DPR, 5 * DPR]);
+        ctx.beginPath(); ctx.moveTo(x, y);
+        for (const w of [a.to].concat(a.path || [])) ctx.lineTo(...toScreen(m.terr[w].lx, m.terr[w].ly));
+        ctx.stroke(); ctx.setLineDash([]);
+      }
       const r = R * 0.75;
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fillStyle = st.players[a.owner].color; ctx.fill();
@@ -443,7 +497,7 @@
       const t = st.territories[sel];
       const owner = t.owner >= 0 ? st.players[t.owner].name : 'Neutre';
       $('pName').textContent = m.terr[sel].name;
-      $('pInfo').textContent = `${owner} · ${t.troops} soldats · +${m.terr[sel].income} or/s`;
+      $('pInfo').textContent = own ? `${t.troops} soldats · +${m.terr[sel].income} or/s · touche une cible` : `${owner} · ${t.troops} soldats · +${m.terr[sel].income} or/s`;
     } else {
       $('pName').textContent = 'Aucune sélection';
       $('pInfo').textContent = 'Clique sur un de tes territoires';
