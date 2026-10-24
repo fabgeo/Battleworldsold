@@ -103,3 +103,35 @@ button.link:hover { background: none; text-decoration: underline; }
   #buildMenu { left: 10px; right: 10px; }
   #buildMenu button { min-width: 0; flex: 1; padding: 8px; }
 }
+
+/* ---------- Mode plein écran / immersif : la carte prend tout l'écran ---------- */
+#game.immersive #topbar { background: none; border: 0; height: auto; padding: 6px max(8px, env(safe-area-inset-right, 0px)) 0 max(8px, env(safe-area-inset-left, 0px)); padding-top: max(6px, env(safe-area-inset-top, 0px)); pointer-events: none; align-items: flex-start; }
+#game.immersive #topbar > * { pointer-events: auto; }
+#game.immersive .tb-actions .ico { display: inline; }
+#game.immersive .tb-actions .lbl { display: none; }
+#game.immersive .tb-actions button { background: #1d2228cc; padding: 5px 9px; min-width: 34px; font-size: 13px; }
+#game.immersive #hud { background: #1d2228cc; border-radius: 8px; padding: 3px 10px; gap: 12px; margin-left: auto; }
+#game.immersive .stat span { font-size: 9px; }
+#game.immersive .stat b { font-size: 14px; }
+#game.immersive #scoreboard { display: none; }
+#game.immersive #bottombar { left: max(8px, env(safe-area-inset-left, 0px)); right: max(8px, env(safe-area-inset-right, 0px)); bottom: max(8px, env(safe-area-inset-bottom, 0px)); height: auto; padding: 6px 8px; background: #1d2228d9; border: 0; border-radius: 12px; }
+#game.immersive #bottombar button { height: 46px; }
+#game.immersive #buildMenu { bottom: 76px; }
+
+/* Téléphone à l'horizontale : les boutons passent en colonne sur la droite */
+@media (orientation: landscape) and (max-height: 600px) {
+  #game.immersive #bottombar { left: auto; top: max(86px, env(safe-area-inset-top, 0px)); bottom: max(8px, env(safe-area-inset-bottom, 0px)); width: 128px; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 6px; padding: 6px; overflow-x: hidden; overflow-y: auto; white-space: normal; }
+  #game.immersive #bottombar .group { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  #game.immersive #bottombar .group > span { display: none; }
+  #game.immersive #bottombar button { height: 34px; min-width: 0; padding: 0; font-size: 14px; }
+  #game.immersive #pSel { flex: none; min-width: 0; font-size: 12px; }
+  #game.immersive #pSel b { white-space: nowrap; }
+  #game.immersive #pSel small { font-size: 10px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; white-space: normal; }
+  #game.immersive #buildMenu { top: max(86px, env(safe-area-inset-top, 0px)); bottom: auto; left: auto; right: 146px; flex-direction: column; }
+  #game.immersive #buildMenu button { padding: 6px 10px; }
+  #game.immersive .wide-only { display: block; }
+  #game.immersive .tb-actions { flex-direction: column; gap: 6px; }
+  #game.immersive #hud { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 6px; width: 128px; padding: 4px 6px; }
+  #game.immersive #hud .stat b { font-size: 13px; }
+  #game.immersive .tb-actions button { width: 40px; height: 40px; padding: 0; }
+}

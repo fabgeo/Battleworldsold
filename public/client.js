@@ -169,6 +169,7 @@
     $('btnPause').classList.toggle('hidden', G.mode !== 'solo');
     $('btnBuild').classList.toggle('hidden', !opts.buildings);
     show('game');
+    if (G.immersive) setImmersive(true); // redemande le plein écran du navigateur (possible si lancé par un clic)
     resize();
   }
 
@@ -277,27 +278,59 @@
 
   // ---------- Vue ----------
   let DPR = 1;
-  const BAR_TOP = 50, BAR_BOT = 84;
+  // Marges (px CSS) laissées libres par les barres autour de la carte
+  let inset = { t: 50, b: 84, l: 0, r: 0 };
+  function measureInsets() {
+    if (!G.immersive) { inset = { t: 50, b: 84, l: 0, r: 0 }; return; }
+    const bb = $('bottombar').getBoundingClientRect();
+    // horizontal : boutons en colonne à gauche, achat/envoi en colonne à droite
+    if (bb.height > bb.width) inset = { t: 0, b: 0, l: document.querySelector('.tb-actions').getBoundingClientRect().right + 4, r: window.innerWidth - bb.left };
+    else inset = { t: 40, b: window.innerHeight - bb.top, l: 0, r: 0 };
+  }
   function resize() {
     DPR = window.devicePixelRatio || 1;
     canvas.width = canvas.clientWidth * DPR;
     canvas.height = canvas.clientHeight * DPR;
+    measureInsets();
   }
   window.addEventListener('resize', resize);
 
   function viewScale() {
     const m = G.map;
-    const fit = Math.min(canvas.width / (m.w + 4), (canvas.height - (BAR_TOP + BAR_BOT + 10) * DPR) / (m.h + 4));
+    const w = canvas.width - (inset.l + inset.r) * DPR, h = canvas.height - (inset.t + inset.b + 6) * DPR;
+    const fit = Math.min(w / (m.w + 2), h / (m.h + 2));
     return Math.max(fit, 1) * G.view.zoom;
   }
+  function center() {
+    return [(inset.l * DPR + canvas.width - inset.r * DPR) / 2, (inset.t * DPR + canvas.height - inset.b * DPR) / 2];
+  }
   function toScreen(x, y) {
-    const s = viewScale();
-    return [canvas.width / 2 + (x - G.view.cx) * s, canvas.height / 2 + (BAR_TOP - BAR_BOT) / 2 * DPR + (y - G.view.cy) * s];
+    const s = viewScale(), [cx, cy] = center();
+    return [cx + (x - G.view.cx) * s, cy + (y - G.view.cy) * s];
   }
   function toMap(sx, sy) {
-    const s = viewScale();
-    return [(sx * DPR - canvas.width / 2) / s + G.view.cx, (sy * DPR - canvas.height / 2 - (BAR_TOP - BAR_BOT) / 2 * DPR) / s + G.view.cy];
+    const s = viewScale(), [cx, cy] = center();
+    return [(sx * DPR - cx) / s + G.view.cx, (sy * DPR - cy) / s + G.view.cy];
   }
+
+  // Plein écran : vrai plein écran du navigateur quand il est disponible + disposition immersive
+  function setImmersive(on) {
+    G.immersive = on;
+    $('game').classList.toggle('immersive', on);
+    $('btnFull').querySelector('.ico').textContent = on ? '⤡' : '⤢';
+    $('btnFull').querySelector('.lbl').textContent = on ? 'Quitter le plein écran' : 'Plein écran';
+    store.set('bw-immersive', on ? '1' : '');
+    const el = document.documentElement;
+    try {
+      if (on && !document.fullscreenElement && el.requestFullscreen) el.requestFullscreen().catch(() => {});
+      else if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    } catch (e) {}
+    requestAnimationFrame(resize);
+  }
+  $('btnFull').onclick = () => setImmersive(!G.immersive);
+  G.immersive = store.get('bw-immersive') === '1';
+  $('game').classList.toggle('immersive', G.immersive);
+  document.addEventListener('fullscreenchange', () => requestAnimationFrame(resize));
   function terrAt(sx, sy) {
     const [x, y] = toMap(sx, sy);
     const m = G.map;

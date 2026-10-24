@@ -49,7 +49,8 @@ Carte, taille, vitesse (lente / normale / rapide), or de départ et bâtiments. 
   et le nombre de soldats à peu près nécessaire pour la prendre.
 - Glisser-déposer d'un de tes territoires vers une cible : même chose.
 - Barre du bas : achat (+1, +5, +10, Max), **Bâtir**, et part des troupes envoyées (25 à 100 %).
-- Barre du haut : Quitter, Recommencer, **Pause** (solo).
+- Barre du haut : Quitter, Recommencer, **Pause** (solo), **Plein écran**. En plein écran, la carte prend tout l'écran ;
+  téléphone à l'horizontale : boutons en colonnes à gauche et à droite de la carte.
 - `B` : acheter le maximum. `1`–`4` : 25/50/75/100 %. `P` : pause. Échap ou clic droit : désélection.
 - Molette ou pincement à deux doigts : zoom de la carte. Glisser depuis un territoire qui n'est pas à toi : déplacer la vue.
 
