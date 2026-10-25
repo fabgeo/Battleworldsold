@@ -302,11 +302,16 @@
   }
   function resize() {
     DPR = window.devicePixelRatio || 1;
-    canvas.width = canvas.clientWidth * DPR;
-    canvas.height = canvas.clientHeight * DPR;
+    canvas.width = Math.round(canvas.clientWidth * DPR);
+    canvas.height = Math.round(canvas.clientHeight * DPR);
     measureInsets();
   }
   window.addEventListener('resize', resize);
+  // Sur téléphone (surtout iPhone en mode « écran d'accueil »), l'événement de rotation arrive parfois
+  // avant que la page ait sa nouvelle taille : on remesure aussi un peu après.
+  const resizeSoon = () => { resize(); setTimeout(resize, 150); setTimeout(resize, 500); };
+  window.addEventListener('orientationchange', resizeSoon);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeSoon);
 
   function viewScale() {
     const m = G.map;
@@ -814,6 +819,8 @@
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     if (G.mode === 'solo' && G.state && !G.paused) E.step(G.state, G.map, dt);
+    // filet de sécurité : si la taille affichée a changé (rotation), on redimensionne
+    if (G.map && (Math.round(canvas.clientWidth * (window.devicePixelRatio || 1)) !== canvas.width || Math.round(canvas.clientHeight * (window.devicePixelRatio || 1)) !== canvas.height)) resize();
     draw();
     uiAcc += dt;
     if (uiAcc > 0.1) { uiAcc = 0; updateUI(); }
