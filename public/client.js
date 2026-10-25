@@ -349,6 +349,21 @@
   G.immersive = store.get('bw-immersive') === '1';
   $('game').classList.toggle('immersive', G.immersive);
   document.addEventListener('fullscreenchange', () => requestAnimationFrame(resize));
+  // Au doigt, les petits territoires sont durs à viser : on prend le rond de troupes le plus proche (rayon 28 px)
+  // (le territoire sous le doigt reste prioritaire : sa distance compte pour moitié)
+  function terrAtTouch(sx, sy) {
+    const under = terrAt(sx, sy);
+    let best = under, bd = Infinity;
+    G.map.terr.forEach((T, i) => {
+      const [x, y] = toScreen(T.lx, T.ly);
+      let d = Math.hypot(x / DPR - sx, y / DPR - sy);
+      if (i === under) d *= 0.5;
+      if (d <= 28 && d < bd) { bd = d; best = i; }
+    });
+    return best;
+  }
+  const pick = (e) => (e.pointerType === 'touch' ? terrAtTouch(e.offsetX, e.offsetY) : terrAt(e.offsetX, e.offsetY));
+  G.debug = { toScreen: (x, y) => toScreen(x, y).map(v => v / DPR), terrAtTouch };
   function terrAt(sx, sy) {
     const [x, y] = toMap(sx, sy);
     const m = G.map;
@@ -371,7 +386,7 @@
       G.pinch = { dist: Math.hypot(p1.x - p2.x, p1.y - p2.y), zoom: G.view.zoom };
       return;
     }
-    const t = terrAt(e.offsetX, e.offsetY);
+    const t = pick(e);
     const own = t >= 0 && G.state && G.state.territories[t].owner === G.me;
     G.drag = { x: e.offsetX, y: e.offsetY, button: e.button, from: e.button === 0 && own ? t : -1, moved: false, cx: G.view.cx, cy: G.view.cy };
   });
@@ -401,7 +416,7 @@
     const d = G.drag;
     G.drag = null;
     if (!d || !G.state || e.type === 'pointercancel') return;
-    const t = terrAt(e.offsetX, e.offsetY);
+    const t = pick(e);
     if (!d.moved) {
       if (d.button === 2) { G.selected = -1; return; }
       if (d.button === 0) onClick(t);
@@ -487,7 +502,6 @@
   }
   $('btnBuild').onclick = () => setBuildOpen(!G.buildOpen);
   document.querySelectorAll('[data-build]').forEach(b => {
-    b.querySelector('i').textContent = E.BUILDINGS[b.dataset.build].cost + ' or';
     b.onclick = () => { act({ type: 'build', t: G.selected, kind: b.dataset.build }); setBuildOpen(false); G.selected = -1; };
   });
 
@@ -602,8 +616,8 @@
       ctx.lineWidth = 2 * DPR; ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.stroke();
       ctx.fillStyle = '#fff'; ctx.font = font(R * 1.0);
       ctx.fillText(txt, x, y + 1);
-      const isCap = t.owner >= 0 && st.players[t.owner].capital === i;
-      if (isCap) { ctx.font = font(R * 1.1); ctx.fillStyle = '#ffd84a'; ctx.fillText('★', x, y - r - R * 0.45); }
+      const caps = st.capitals || st.players.map(pl => pl.capital);
+      if (caps.includes(i)) drawStar(x, y - r - R * 0.35, R * 0.62);
       ctx.font = font(R * 0.75, 700); ctx.fillStyle = 'rgba(30,25,15,0.85)';
       const inc = T.income + E.TERRAIN[T.terrain].income + (t.buildings.includes('mine') ? 2 : 0);
       ctx.fillText('+' + inc, x, y + r + R * 0.55);
@@ -642,6 +656,18 @@
       ctx.fillStyle = '#fff'; ctx.font = font(R * 0.8);
       ctx.fillText(String(a.n), x, y + 1);
     }
+  }
+
+  // Étoile des capitales : jaune avec un contour sombre, lisible sur toutes les couleurs
+  function drawStar(cx, cy, rad) {
+    ctx.beginPath();
+    for (let k = 0; k < 10; k++) {
+      const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? rad * 0.45 : rad;
+      ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#ffd84a'; ctx.fill();
+    ctx.lineWidth = 1.5 * DPR; ctx.strokeStyle = 'rgba(20,15,5,0.9)'; ctx.stroke();
   }
 
   // Infos d'un territoire : terrain, défense et nombre de soldats nécessaire pour le prendre
@@ -699,8 +725,9 @@
     if (!canBuild && G.buildOpen) setBuildOpen(false);
     document.querySelectorAll('[data-build]').forEach(b => {
       const k = b.dataset.build, has = built.includes(k);
-      b.disabled = !canBuild || has || me.gold < E.BUILDINGS[k].cost;
-      b.querySelector('i').textContent = has ? 'Déjà construit' : E.BUILDINGS[k].cost + ' or';
+      const cost = E.buildCost(st, G.me, k);
+      b.disabled = !canBuild || has || me.gold < cost;
+      b.querySelector('i').textContent = has ? 'Déjà construit' : cost + ' or';
     });
 
     // Fin de partie / élimination

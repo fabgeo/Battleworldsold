@@ -36,7 +36,8 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
   | Montagne | ×1,6 | ×0,5 | — |
   | Ville | ×1,1 | normale | +2 |
 
-- **Bâtiments** (test, désactivables) : Fort 60 or (défense ×1,5), Mine 50 or (+2 or par versement), Caserne 80 or (+1 soldat toutes les 3 s).
+- **Bâtiments** (test, désactivables) : Fort (défense ×1,5), Mine (+2 or par versement), Caserne (+1 soldat toutes les 3 s).
+  Prix de départ bas (Fort 35, Mine 25, Caserne 45), puis **+35 % pour chaque bâtiment déjà construit** par le joueur.
   Un territoire peut avoir les trois (un de chaque type) ; ils restent en place si le territoire change de main.
 - **Envoi de troupes** : depuis un de tes territoires vers n'importe quel territoire. Il reste toujours 1 soldat sur place.
   Le trajet passe de préférence par tes territoires ; un territoire neutre ou ennemi sur le chemin est attaqué :
@@ -44,6 +45,7 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
 - Les **passages maritimes** sont 2 fois plus lents que par la terre.
 - Deux armées ennemies qui se croisent sur le même chemin se battent ; les survivants continuent.
 - **Combat** : les défenseurs comptent ×1,2 × terrain × fort, l'attaque a ±15 % d'aléatoire.
+- Chaque **capitale de départ** (joueur et bots) garde une étoile ★ toute la partie.
 - **Capitale prise** : le vaincu perd la moitié de son or, que le vainqueur récupère.
 - Un joueur sans territoire ni armée en marche est éliminé ; le dernier en vie gagne.
   À la fin : statistiques (territoires au fil du temps, captures, soldats achetés, plus grande bataille).
@@ -60,6 +62,7 @@ Les bots cherchent à gagner, donc à **empêcher le premier de gagner** (le pre
 humain ou bot) :
 - dès que le premier a une vraie avance (au moins 2 territoires de plus que le deuxième), les bots normaux et difficiles
   lui réservent **au moins 70 % de leurs attaques contre des joueurs** (en pratique 90 % et plus) ;
+- les bots « normal » réfléchissent un peu moins vite qu'avant (toutes les ~2 s), « difficile » reste très réactif ;
 - ils peuvent l'attaquer même s'il n'est pas leur voisin : l'armée traverse la carte et prend ce qu'il y a sur le chemin ;
 - s'ils ne sont pas assez forts pour frapper, ils accumulent soldats et renforts sur leur base de frappe face à lui ;
 - quand tout le monde est au coude à coude, ils s'étendent et achèvent les joueurs presque éliminés, pour que la partie avance ;
@@ -71,6 +74,7 @@ humain ou bot) :
   À la souris, le trajet prévu s'affiche en pointillés et la barre du bas indique la défense de la cible
   et le nombre de soldats à peu près nécessaire pour la prendre.
 - Glisser-déposer d'un de tes territoires vers une cible : même chose.
+- Au doigt, toucher près d'un rond de troupes suffit : le territoire le plus proche est choisi (pratique pour les petits territoires).
 - Après une action (envoi, achat, construction), la sélection s'enlève : le clic suivant sélectionne.
 - Barre du bas : achat (+1, +5, +10, Max), **Bâtir**, et part des troupes envoyées (25 à 100 %).
 - Barre du haut : Quitter, Recommencer, **Pause** (solo), **Plein écran**. En plein écran, la carte prend tout l'écran ;

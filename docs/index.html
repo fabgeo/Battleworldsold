@@ -305,7 +305,7 @@ button.link:hover { background: none; text-decoration: underline; }
     SEA_SLOW: 2,           // un passage maritime est 2 fois plus lent
     BARRACKS_EVERY: 3,     // secondes entre deux soldats produits par une caserne
     HISTORY_EVERY: 5,      // secondes entre deux points des statistiques
-    BOT_THINK: { easy: 2.6, normal: 1.6, hard: 0.9 },
+    BOT_THINK: { easy: 2.6, normal: 2.1, hard: 0.9 },
   };
 
   const TERRAIN = {
@@ -316,10 +316,17 @@ button.link:hover { background: none; text-decoration: underline; }
   };
 
   const BUILDINGS = {
-    fort: { name: 'Fort', cost: 60, desc: 'Défense ×1,5', letter: 'F' },
-    mine: { name: 'Mine', cost: 50, desc: '+2 or par versement', letter: 'M' },
-    barracks: { name: 'Caserne', cost: 80, desc: '+1 soldat / 3 s', letter: 'C' },
+    fort: { name: 'Fort', cost: 35, desc: 'Défense ×1,5', letter: 'F' },
+    mine: { name: 'Mine', cost: 25, desc: '+2 or par versement', letter: 'M' },
+    barracks: { name: 'Caserne', cost: 45, desc: '+1 soldat / 3 s', letter: 'C' },
   };
+  const BUILD_STEP = 0.35; // chaque bâtiment déjà construit par le joueur rend le suivant 35 % plus cher
+
+  // Prix d'un bâtiment pour un joueur : bas pour les premiers, puis de plus en plus cher
+  function buildCost(state, pi, kind) {
+    const built = state.players[pi] ? state.players[pi].stats.built : 0;
+    return Math.round(BUILDINGS[kind].cost * (1 + BUILD_STEP * built));
+  }
 
   const SIZES = { small: 25, medium: 40, large: 60 }; // territoires de la carte aléatoire
   const COLORS = ['#e6194b', '#3c7dd9', '#3cb44b', '#f58231', '#911eb4', '#16b5b5', '#d6c400', '#f032e6'];
@@ -632,6 +639,7 @@ button.link:hover { background: none; text-decoration: underline; }
       state.territories[caps[i]].owner = i;
       state.territories[caps[i]].troops = CFG.START_TROOPS;
     });
+    state.capitals = caps.slice(); // capitales de départ (étoile affichée en permanence)
     recordHistory(state);
     return state;
   }
@@ -731,8 +739,10 @@ button.link:hover { background: none; text-decoration: underline; }
     if (act.type === 'build') {
       const t = state.territories[act.t], b = BUILDINGS[act.kind];
       // plusieurs bâtiments par territoire, mais un seul de chaque type
-      if (!state.opts.buildings || !t || !b || t.owner !== pi || t.buildings.includes(act.kind) || p.gold < b.cost) return false;
-      p.gold -= b.cost;
+      if (!state.opts.buildings || !t || !b || t.owner !== pi || t.buildings.includes(act.kind)) return false;
+      const cost = buildCost(state, pi, act.kind);
+      if (p.gold < cost) return false;
+      p.gold -= cost;
       t.buildings.push(act.kind);
       p.stats.built++;
       return true;
@@ -996,7 +1006,7 @@ button.link:hover { background: none; text-decoration: underline; }
     }
 
     // 3. Bâtiments : une mine à l'arrière quand on est riche, un fort sur la capitale menacée
-    if (state.opts.buildings && level !== 'easy' && p.gold > 140 && srand(state) < 0.35) {
+    if (state.opts.buildings && level !== 'easy' && p.gold > buildCost(state, pi, 'mine') + 80 && srand(state) < 0.35) {
       const kind = srand(state) < 0.7 ? 'mine' : 'barracks';
       const interior = mine.filter(i => !T[i].buildings.includes(kind) && !frontier.includes(i));
       if (p.capital != null && T[p.capital].owner === pi && !T[p.capital].buildings.includes('fort') && frontier.includes(p.capital)) {
@@ -1059,7 +1069,7 @@ button.link:hover { background: none; text-decoration: underline; }
     }
   }
 
-  return { CFG, COLORS, TERRAIN, BUILDINGS, SIZES, resolveOpts, generateMap, createGame, applyAction, step, incomeOf, defenseOf, travelTime, isSea, findPath, legPos, crossingPoint };
+  return { CFG, COLORS, TERRAIN, BUILDINGS, SIZES, buildCost, resolveOpts, generateMap, createGame, applyAction, step, incomeOf, defenseOf, travelTime, isSea, findPath, legPos, crossingPoint };
 });
 
 </script>
@@ -1415,6 +1425,21 @@ button.link:hover { background: none; text-decoration: underline; }
   G.immersive = store.get('bw-immersive') === '1';
   $('game').classList.toggle('immersive', G.immersive);
   document.addEventListener('fullscreenchange', () => requestAnimationFrame(resize));
+  // Au doigt, les petits territoires sont durs à viser : on prend le rond de troupes le plus proche (rayon 28 px)
+  // (le territoire sous le doigt reste prioritaire : sa distance compte pour moitié)
+  function terrAtTouch(sx, sy) {
+    const under = terrAt(sx, sy);
+    let best = under, bd = Infinity;
+    G.map.terr.forEach((T, i) => {
+      const [x, y] = toScreen(T.lx, T.ly);
+      let d = Math.hypot(x / DPR - sx, y / DPR - sy);
+      if (i === under) d *= 0.5;
+      if (d <= 28 && d < bd) { bd = d; best = i; }
+    });
+    return best;
+  }
+  const pick = (e) => (e.pointerType === 'touch' ? terrAtTouch(e.offsetX, e.offsetY) : terrAt(e.offsetX, e.offsetY));
+  G.debug = { toScreen: (x, y) => toScreen(x, y).map(v => v / DPR), terrAtTouch };
   function terrAt(sx, sy) {
     const [x, y] = toMap(sx, sy);
     const m = G.map;
@@ -1437,7 +1462,7 @@ button.link:hover { background: none; text-decoration: underline; }
       G.pinch = { dist: Math.hypot(p1.x - p2.x, p1.y - p2.y), zoom: G.view.zoom };
       return;
     }
-    const t = terrAt(e.offsetX, e.offsetY);
+    const t = pick(e);
     const own = t >= 0 && G.state && G.state.territories[t].owner === G.me;
     G.drag = { x: e.offsetX, y: e.offsetY, button: e.button, from: e.button === 0 && own ? t : -1, moved: false, cx: G.view.cx, cy: G.view.cy };
   });
@@ -1467,7 +1492,7 @@ button.link:hover { background: none; text-decoration: underline; }
     const d = G.drag;
     G.drag = null;
     if (!d || !G.state || e.type === 'pointercancel') return;
-    const t = terrAt(e.offsetX, e.offsetY);
+    const t = pick(e);
     if (!d.moved) {
       if (d.button === 2) { G.selected = -1; return; }
       if (d.button === 0) onClick(t);
@@ -1553,7 +1578,6 @@ button.link:hover { background: none; text-decoration: underline; }
   }
   $('btnBuild').onclick = () => setBuildOpen(!G.buildOpen);
   document.querySelectorAll('[data-build]').forEach(b => {
-    b.querySelector('i').textContent = E.BUILDINGS[b.dataset.build].cost + ' or';
     b.onclick = () => { act({ type: 'build', t: G.selected, kind: b.dataset.build }); setBuildOpen(false); G.selected = -1; };
   });
 
@@ -1668,8 +1692,8 @@ button.link:hover { background: none; text-decoration: underline; }
       ctx.lineWidth = 2 * DPR; ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.stroke();
       ctx.fillStyle = '#fff'; ctx.font = font(R * 1.0);
       ctx.fillText(txt, x, y + 1);
-      const isCap = t.owner >= 0 && st.players[t.owner].capital === i;
-      if (isCap) { ctx.font = font(R * 1.1); ctx.fillStyle = '#ffd84a'; ctx.fillText('★', x, y - r - R * 0.45); }
+      const caps = st.capitals || st.players.map(pl => pl.capital);
+      if (caps.includes(i)) drawStar(x, y - r - R * 0.35, R * 0.62);
       ctx.font = font(R * 0.75, 700); ctx.fillStyle = 'rgba(30,25,15,0.85)';
       const inc = T.income + E.TERRAIN[T.terrain].income + (t.buildings.includes('mine') ? 2 : 0);
       ctx.fillText('+' + inc, x, y + r + R * 0.55);
@@ -1708,6 +1732,18 @@ button.link:hover { background: none; text-decoration: underline; }
       ctx.fillStyle = '#fff'; ctx.font = font(R * 0.8);
       ctx.fillText(String(a.n), x, y + 1);
     }
+  }
+
+  // Étoile des capitales : jaune avec un contour sombre, lisible sur toutes les couleurs
+  function drawStar(cx, cy, rad) {
+    ctx.beginPath();
+    for (let k = 0; k < 10; k++) {
+      const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? rad * 0.45 : rad;
+      ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#ffd84a'; ctx.fill();
+    ctx.lineWidth = 1.5 * DPR; ctx.strokeStyle = 'rgba(20,15,5,0.9)'; ctx.stroke();
   }
 
   // Infos d'un territoire : terrain, défense et nombre de soldats nécessaire pour le prendre
@@ -1765,8 +1801,9 @@ button.link:hover { background: none; text-decoration: underline; }
     if (!canBuild && G.buildOpen) setBuildOpen(false);
     document.querySelectorAll('[data-build]').forEach(b => {
       const k = b.dataset.build, has = built.includes(k);
-      b.disabled = !canBuild || has || me.gold < E.BUILDINGS[k].cost;
-      b.querySelector('i').textContent = has ? 'Déjà construit' : E.BUILDINGS[k].cost + ' or';
+      const cost = E.buildCost(st, G.me, k);
+      b.disabled = !canBuild || has || me.gold < cost;
+      b.querySelector('i').textContent = has ? 'Déjà construit' : cost + ' or';
     });
 
     // Fin de partie / élimination

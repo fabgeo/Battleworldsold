@@ -19,7 +19,7 @@
     SEA_SLOW: 2,           // un passage maritime est 2 fois plus lent
     BARRACKS_EVERY: 3,     // secondes entre deux soldats produits par une caserne
     HISTORY_EVERY: 5,      // secondes entre deux points des statistiques
-    BOT_THINK: { easy: 2.6, normal: 1.6, hard: 0.9 },
+    BOT_THINK: { easy: 2.6, normal: 2.1, hard: 0.9 },
   };
 
   const TERRAIN = {
@@ -30,10 +30,17 @@
   };
 
   const BUILDINGS = {
-    fort: { name: 'Fort', cost: 60, desc: 'Défense ×1,5', letter: 'F' },
-    mine: { name: 'Mine', cost: 50, desc: '+2 or par versement', letter: 'M' },
-    barracks: { name: 'Caserne', cost: 80, desc: '+1 soldat / 3 s', letter: 'C' },
+    fort: { name: 'Fort', cost: 35, desc: 'Défense ×1,5', letter: 'F' },
+    mine: { name: 'Mine', cost: 25, desc: '+2 or par versement', letter: 'M' },
+    barracks: { name: 'Caserne', cost: 45, desc: '+1 soldat / 3 s', letter: 'C' },
   };
+  const BUILD_STEP = 0.35; // chaque bâtiment déjà construit par le joueur rend le suivant 35 % plus cher
+
+  // Prix d'un bâtiment pour un joueur : bas pour les premiers, puis de plus en plus cher
+  function buildCost(state, pi, kind) {
+    const built = state.players[pi] ? state.players[pi].stats.built : 0;
+    return Math.round(BUILDINGS[kind].cost * (1 + BUILD_STEP * built));
+  }
 
   const SIZES = { small: 25, medium: 40, large: 60 }; // territoires de la carte aléatoire
   const COLORS = ['#e6194b', '#3c7dd9', '#3cb44b', '#f58231', '#911eb4', '#16b5b5', '#d6c400', '#f032e6'];
@@ -346,6 +353,7 @@
       state.territories[caps[i]].owner = i;
       state.territories[caps[i]].troops = CFG.START_TROOPS;
     });
+    state.capitals = caps.slice(); // capitales de départ (étoile affichée en permanence)
     recordHistory(state);
     return state;
   }
@@ -445,8 +453,10 @@
     if (act.type === 'build') {
       const t = state.territories[act.t], b = BUILDINGS[act.kind];
       // plusieurs bâtiments par territoire, mais un seul de chaque type
-      if (!state.opts.buildings || !t || !b || t.owner !== pi || t.buildings.includes(act.kind) || p.gold < b.cost) return false;
-      p.gold -= b.cost;
+      if (!state.opts.buildings || !t || !b || t.owner !== pi || t.buildings.includes(act.kind)) return false;
+      const cost = buildCost(state, pi, act.kind);
+      if (p.gold < cost) return false;
+      p.gold -= cost;
       t.buildings.push(act.kind);
       p.stats.built++;
       return true;
@@ -710,7 +720,7 @@
     }
 
     // 3. Bâtiments : une mine à l'arrière quand on est riche, un fort sur la capitale menacée
-    if (state.opts.buildings && level !== 'easy' && p.gold > 140 && srand(state) < 0.35) {
+    if (state.opts.buildings && level !== 'easy' && p.gold > buildCost(state, pi, 'mine') + 80 && srand(state) < 0.35) {
       const kind = srand(state) < 0.7 ? 'mine' : 'barracks';
       const interior = mine.filter(i => !T[i].buildings.includes(kind) && !frontier.includes(i));
       if (p.capital != null && T[p.capital].owner === pi && !T[p.capital].buildings.includes('fort') && frontier.includes(p.capital)) {
@@ -773,5 +783,5 @@
     }
   }
 
-  return { CFG, COLORS, TERRAIN, BUILDINGS, SIZES, resolveOpts, generateMap, createGame, applyAction, step, incomeOf, defenseOf, travelTime, isSea, findPath, legPos, crossingPoint };
+  return { CFG, COLORS, TERRAIN, BUILDINGS, SIZES, buildCost, resolveOpts, generateMap, createGame, applyAction, step, incomeOf, defenseOf, travelTime, isSea, findPath, legPos, crossingPoint };
 });
