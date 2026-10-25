@@ -77,10 +77,10 @@ humain ou bot) :
   Glisser ailleurs sur la carte la déplace, sans envoyer de troupes.
 - Au doigt, toucher près d'un rond de troupes suffit : le territoire le plus proche est choisi (pratique pour les petits territoires).
 - Après une action (envoi, achat, construction), la sélection s'enlève : le clic suivant sélectionne.
-- Barre du bas : achat (+1, +5, +10, Max), **Bâtir**, et part des troupes envoyées (25 à 100 %).
+- Barre du bas : achat (+1, +5, +10, Max), **Bâtir**, et part des troupes envoyées (25 à 100 %). Sur PC, elle est centrée avec de grands boutons.
 - Barre du haut : Quitter, Recommencer, **Pause** (solo), **Plein écran**. En plein écran, la carte prend tout l'écran ;
   téléphone à l'horizontale : boutons en colonnes à gauche et à droite de la carte.
-- **Raccourcis clavier (PC)**, visibles et modifiables via « Raccourcis clavier » (menu) ou le bouton ⌨ en jeu ;
+- **Raccourcis clavier (PC)**, visibles et modifiables via « Raccourcis clavier » dans le menu ou dans l'écran de **Pause** ;
   ils sont mémorisés dans le navigateur. Les achats et constructions au clavier visent le territoire sélectionné,
   ou à défaut celui sous la souris (pas besoin de cliquer). Par défaut :
 

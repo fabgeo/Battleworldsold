@@ -148,3 +148,13 @@ button.link:hover { background: none; text-decoration: underline; }
 #keysTable tr.group td { text-align: left; color: #9aa5b1; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 0; padding-top: 12px; }
 /* le bouton Raccourcis n'a de sens qu'avec un clavier / une souris */
 @media (hover: none) { .pc-only, .keys-link { display: none !important; } }
+
+/* PC (souris, écran large) : barre du bas plus grande et centrée */
+@media (hover: hover) and (min-width: 900px) {
+  #game:not(.immersive) #bottombar { height: 104px; justify-content: center; gap: 32px; }
+  #game:not(.immersive) #pSel { flex: 0 1 300px; }
+  #game:not(.immersive) #bottombar .group { gap: 8px; }
+  #game:not(.immersive) #bottombar .group > span { font-size: 13px; }
+  #game:not(.immersive) #bottombar button { height: 68px; min-width: 82px; padding: 0 18px; font-size: 21px; border-radius: 10px; }
+  #game:not(.immersive) #buildMenu { bottom: 112px; left: 50%; right: auto; transform: translateX(-50%); }
+}

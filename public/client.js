@@ -294,7 +294,7 @@
   // Marges (px CSS) laissées libres par les barres autour de la carte
   let inset = { t: 50, b: 84, l: 0, r: 0 };
   function measureInsets() {
-    if (!G.immersive) { inset = { t: 50, b: 84, l: 0, r: 0 }; return; }
+    if (!G.immersive) { inset = { t: $('topbar').offsetHeight || 50, b: $('bottombar').offsetHeight || 84, l: 0, r: 0 }; return; }
     const bb = $('bottombar').getBoundingClientRect();
     // horizontal : boutons en colonne à gauche, achat/envoi en colonne à droite
     if (bb.height > bb.width) inset = { t: 0, b: 0, l: document.querySelector('.tb-actions').getBoundingClientRect().right + 4, r: window.innerWidth - bb.left };
