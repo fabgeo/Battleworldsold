@@ -592,6 +592,7 @@
     const mine = [];
     T.forEach((t, i) => { if (t.owner === pi) mine.push(i); });
     if (!mine.length) return;
+    if (!p.atk) p.atk = { lead: 0, other: 0 }; // compteur d'attaques contre le premier / contre les autres joueurs
 
     const incoming = {}; // troupes déjà envoyées par moi vers un territoire
     for (const a of state.armies) if (a.owner === pi) {
@@ -599,67 +600,116 @@
       incoming[dest] = (incoming[dest] || 0) + a.n;
     }
 
-    // Puissance de chaque joueur (territoires, soldats, or). Pour gagner, un bot cherche à
-    // empêcher le plus fort de gagner : il le vise en priorité, surtout s'il domine nettement,
-    // au lieu de s'acharner sur les plus faibles. Les bots faciles restent opportunistes.
-    const power = state.players.map(() => 0);
-    T.forEach(t => { if (t.owner >= 0) power[t.owner] += 1 + t.troops / 15; });
-    for (const a of state.armies) power[a.owner] += a.n / 15;
-    state.players.forEach((q, i) => { if (q.alive) power[i] += q.gold / 60; });
-    let rival = -1;
-    power.forEach((v, i) => { if (i !== pi && state.players[i].alive && (rival < 0 || v > power[rival])) rival = i; });
-    const others = power.filter((v, i) => i !== rival && state.players[i].alive);
-    const avgOthers = others.length ? others.reduce((a, b) => a + b, 0) / others.length : 0;
-    const iLead = rival < 0 || power[pi] >= power[rival];
-    const dominant = !iLead && power[rival] > 1.4 * avgOthers;
+    // Le « premier » : celui qui a le plus de territoires (départage : soldats). Pour gagner, il faut
+    // l'empêcher de gagner : tant que le bot n'est pas lui-même premier, au moins 70 % de ses attaques
+    // contre des joueurs visent le premier, même s'il n'est pas voisin (attaque à travers la carte).
+    const counts = state.players.map(() => 0), troops = state.players.map(() => 0);
+    T.forEach(t => { if (t.owner >= 0) { counts[t.owner]++; troops[t.owner] += t.troops; } });
+    let first = -1;
+    state.players.forEach((q, i) => {
+      if (!q.alive) return;
+      if (first < 0 || counts[i] > counts[first] || (counts[i] === counts[first] && troops[i] > troops[first])) first = i;
+    });
+    const iLead = first === pi;
+    // le premier doit avoir une vraie avance (sinon, quand tout le monde est au coude à coude, la partie tournerait en rond)
+    let second = 0;
+    counts.forEach((c, i) => { if (i !== first && state.players[i].alive) second = Math.max(second, c); });
+    const clearLead = first >= 0 && counts[first] >= second + 2;
+    const focus = level !== 'easy' && !iLead && clearLead;
+    const QUOTA = 0.7;
+    const leadShare = (extraLead, extraOther) => (p.atk.lead + extraLead) / Math.max(1, p.atk.lead + p.atk.other + extraLead + extraOther);
     const neutralsLeft = T.filter(t => t.owner === -1).length;
+    // un joueur réduit à 1-2 territoires une fois la carte partagée : l'achever fait avancer la partie
+    const nearlyOut = (o) => counts[o] <= 2 && neutralsLeft < T.length * 0.3;
 
-    const frontier = [];
-    const options = [];
-    for (const i of mine) {
-      const enemies = map.terr[i].neighbors.filter(n => T[n].owner !== pi);
-      if (!enemies.length) continue;
-      frontier.push(i);
-      for (const n of enemies) {
-        const def = T[n].troops, o = T[n].owner;
-        const need = Math.ceil(def * defenseOf(state, map, n) * margin) + 2 - (incoming[n] || 0);
-        let score = map.terr[n].income * 3 + TERRAIN[map.terr[n].terrain].income * 2;
-        const isCap = o >= 0 && state.players[o].capital === n;
-        if (level === 'easy') {
-          score += (o === -1 ? 1 : 0) - def * 0.25;
-        } else if (o === -1) {
-          // s'étendre sur les neutres, surtout en début de partie ; moins quand il faut freiner un dominant
-          score += (neutralsLeft > T.length * 0.3 ? 2 : 0) - (dominant ? 2 : 0) - def * 0.25;
-        } else if (iLead) {
-          // en tête : achever les adversaires les plus faibles pour gagner
-          score += 3 * (1 - power[o] / Math.max(1, power[pi])) - def * 0.2;
-        } else {
-          const rel = power[o] / Math.max(1, power[rival]); // 1 pour le plus fort
-          score += 6 * rel - def * (o === rival ? 0.08 : 0.25);
-          if (o === rival && dominant) score += 5;
-          if (o !== rival && dominant) score -= 3;
-        }
-        if (isCap) score += 3 + state.players[o].gold / 100 + (o === rival && level !== 'easy' ? 4 : 0);
-        options.push({ from: i, to: n, need, score });
-      }
-    }
+    const launch = (from, to, n) => {
+      const owner = T[to].owner;
+      if (!applyAction(state, map, pi, { type: 'send', from, to, n })) return false;
+      if (owner === first) p.atk.lead++; else if (owner >= 0 && !nearlyOut(owner)) p.atk.other++;
+      return true;
+    };
+    // Troupes nécessaires pour aller de `from` à `to` en prenant tout ce qui n'est pas à moi sur le chemin
+    const costOf = (from, to) => {
+      const path = findPath(state, map, pi, from, to);
+      if (!path) return null;
+      let need = 2;
+      path.forEach((v, k) => {
+        if (T[v].owner === pi) return;
+        need += Math.ceil(T[v].troops * defenseOf(state, map, v) * margin) + (k < path.length - 1 ? 1 : 0);
+      });
+      need = Math.ceil(need * Math.pow(1 + CFG.FATIGUE, Math.max(0, path.length - CFG.FREE_LEGS)));
+      return { path, need: need - (incoming[to] || 0) };
+    };
 
-    // 1. Attaques (le territoire de départ garde toujours 1 soldat)
-    options.sort((a, b) => b.score - a.score);
+    const frontier = mine.filter(i => map.terr[i].neighbors.some(n => T[n].owner !== pi));
     const used = new Set();
     let attacks = 0;
     const maxAttacks = level === 'hard' ? 3 : level === 'easy' ? 1 : 2;
+    let strike = null; // frappe sur le premier en préparation (on accumule des troupes à `from`)
+
+    // 1. Frappes sur le premier (bots normaux et difficiles qui ne sont pas premiers)
+    if (focus) {
+      // distance (en étapes) de chaque territoire à mon empire
+      const dist = new Array(T.length).fill(Infinity), q = [];
+      for (const i of mine) { dist[i] = 0; q.push(i); }
+      for (let k = 0; k < q.length; k++) for (const n of map.terr[q[k]].neighbors) if (dist[n] === Infinity) { dist[n] = dist[q[k]] + 1; q.push(n); }
+      const targets = T.map((t, i) => i).filter(i => T[i].owner === first && dist[i] <= 6)
+        .sort((x, y) => dist[x] - dist[y] || T[x].troops - T[y].troops).slice(0, 8);
+      const cands = [];
+      for (const tg of targets) {
+        // source : le territoire le plus proche de la cible, à égalité celui qui a le plus de soldats
+        const dt = new Array(T.length).fill(Infinity), qq = [tg];
+        dt[tg] = 0;
+        for (let k = 0; k < qq.length; k++) for (const n of map.terr[qq[k]].neighbors) if (dt[n] === Infinity) { dt[n] = dt[qq[k]] + 1; qq.push(n); }
+        let src = -1;
+        for (const i of mine) if (src < 0 || dt[i] < dt[src] || (dt[i] === dt[src] && T[i].troops > T[src].troops)) src = i;
+        const c = costOf(src, tg);
+        if (!c || c.need <= 0) continue;
+        let score = -c.need - dt[src] * 3 + map.terr[tg].income * 2;
+        if (state.players[first].capital === tg) score += 15 + state.players[first].gold / 50;
+        cands.push({ from: src, to: tg, need: c.need, score });
+      }
+      cands.sort((x, y) => y.score - x.score);
+      for (const c of cands) {
+        if (attacks >= maxAttacks) break;
+        if (used.has(c.to)) continue;
+        if (T[c.from].troops - 1 >= c.need && launch(c.from, c.to, c.need)) { used.add(c.to); attacks++; }
+      }
+      if (!attacks && cands.length) strike = cands.reduce((best, c) => (c.need - T[c.from].troops < best.need - T[best.from].troops ? c : best));
+    }
+
+    // 2. Autres attaques sur les voisins (neutres, autres joueurs) — en respectant le quota sur le premier
+    const power = state.players.map((q, i) => counts[i] + troops[i] / 15 + (q.alive ? q.gold / 60 : 0));
+    const options = [];
+    for (const i of frontier) {
+      if (strike && i === strike.from) continue; // on ne dégarnit pas la base de la frappe
+      for (const n of map.terr[i].neighbors) {
+        if (T[n].owner === pi) continue;
+        const def = T[n].troops, o = T[n].owner;
+        const need = Math.ceil(def * defenseOf(state, map, n) * margin) + 2 - (incoming[n] || 0);
+        let score = map.terr[n].income * 3 + TERRAIN[map.terr[n].terrain].income * 2 - def * 0.25;
+        if (level === 'easy') score += o === -1 ? 1 : 0;
+        else if (o === -1) score += neutralsLeft > T.length * 0.3 ? 2 : 0;
+        else if (iLead) score += 3 * (1 - power[o] / Math.max(1, power[pi])); // premier : achever les plus faibles
+        else if (nearlyOut(o)) score += 6;
+        else if (!focus) score += 3 * (1 - power[o] / Math.max(1, power[first]));
+        else if (o === first) score += 8;
+        else if (leadShare(0, 1) < QUOTA) continue; // quota : pas d'attaque sur un autre que le premier
+        else score -= 4;
+        if (o >= 0 && state.players[o].capital === n) score += 3 + state.players[o].gold / 100;
+        options.push({ from: i, to: n, need, score });
+      }
+    }
+    options.sort((x, y) => y.score - x.score);
     for (const o of options) {
       if (attacks >= maxAttacks) break;
       if (used.has(o.to) || o.need <= 0) continue;
-      if (T[o.from].troops - 1 >= o.need) {
-        applyAction(state, map, pi, { type: 'send', from: o.from, to: o.to, n: o.need });
-        used.add(o.to);
-        attacks++;
-      }
+      const owner = T[o.to].owner;
+      if (focus && owner >= 0 && owner !== first && !nearlyOut(owner) && leadShare(0, 1) < QUOTA) continue;
+      if (T[o.from].troops - 1 >= o.need && launch(o.from, o.to, o.need)) { used.add(o.to); attacks++; }
     }
 
-    // 2. Bâtiments : une mine à l'arrière quand on est riche, un fort sur la capitale menacée
+    // 3. Bâtiments : une mine à l'arrière quand on est riche, un fort sur la capitale menacée
     if (state.opts.buildings && level !== 'easy' && p.gold > 140 && srand(state) < 0.35) {
       const kind = srand(state) < 0.7 ? 'mine' : 'barracks';
       const interior = mine.filter(i => !T[i].buildings.includes(kind) && !frontier.includes(i));
@@ -670,9 +720,16 @@
       }
     }
 
-    // 3. Achats : compléter l'attaque la plus rentable, sinon défendre
+    // 4. Achats : défense si menace grave, sinon préparer la frappe sur le premier, sinon l'attaque la plus rentable
     const affordable = Math.floor(p.gold / CFG.SOLDIER_COST);
     if (affordable > 0) {
+      let threatT = -1, threat = 0;
+      for (const i of frontier) {
+        let enemy = 0;
+        for (const n of map.terr[i].neighbors) if (T[n].owner >= 0 && T[n].owner !== pi) enemy = Math.max(enemy, T[n].troops);
+        const th = enemy - T[i].troops * defenseOf(state, map, i);
+        if (th > threat) { threat = th; threatT = i; }
+      }
       let target = null, bestVal = -Infinity;
       for (const o of options) {
         if (used.has(o.to)) continue;
@@ -681,15 +738,10 @@
         const v = o.score - deficit * 0.3;
         if (v > bestVal) { bestVal = v; target = o; }
       }
-      let threatT = -1, threat = 0;
-      for (const i of frontier) {
-        let enemy = 0;
-        for (const n of map.terr[i].neighbors) if (T[n].owner >= 0 && T[n].owner !== pi) enemy = Math.max(enemy, T[n].troops);
-        const th = enemy - T[i].troops * defenseOf(state, map, i);
-        if (th > threat) { threat = th; threatT = i; }
-      }
-      if (threatT >= 0 && (level !== 'easy') && threat > 3 && (!target || threat > 8)) {
+      if (threatT >= 0 && level !== 'easy' && threat > (strike ? 12 : 3) && (!target || threat > 8)) {
         applyAction(state, map, pi, { type: 'buy', t: threatT, n: Math.min(affordable, Math.ceil(threat / defenseOf(state, map, threatT)) + 2) });
+      } else if (strike) {
+        applyAction(state, map, pi, { type: 'buy', t: strike.from, n: affordable });
       } else if (target) {
         applyAction(state, map, pi, { type: 'buy', t: target.from, n: Math.min(affordable, target.need - (T[target.from].troops - 1)) });
       } else if (frontier.length && affordable >= 3) {
@@ -697,16 +749,23 @@
       }
     }
 
-    // 4. Les territoires intérieurs envoient leurs troupes vers le front
+    // 5. Les territoires intérieurs envoient leurs troupes vers le front (vers la base de frappe s'il y en a une,
+    //    sinon de préférence vers le front face au premier)
     if (frontier.length) {
+      const goals = strike ? [strike.from] : (() => {
+        const facing = frontier.filter(i => map.terr[i].neighbors.some(n => T[n].owner === first));
+        return focus && facing.length ? facing : frontier;
+      })();
       const fd = new Array(T.length).fill(Infinity);
-      const q = frontier.slice();
-      for (const f of frontier) fd[f] = 0;
+      const q = goals.slice();
+      for (const f of goals) fd[f] = 0;
       for (let k = 0; k < q.length; k++) {
         for (const n of map.terr[q[k]].neighbors) if (T[n].owner === pi && fd[n] === Infinity) { fd[n] = fd[q[k]] + 1; q.push(n); }
       }
       for (const i of mine) {
-        if (fd[i] === 0 || T[i].troops < 3) continue;
+        if (fd[i] === 0 || fd[i] === Infinity || T[i].troops < 3) continue;
+        // un territoire du front garde ses troupes s'il est menacé par un voisin
+        if (frontier.includes(i) && map.terr[i].neighbors.some(n => T[n].owner >= 0 && T[n].owner !== pi && T[n].troops > T[i].troops)) continue;
         let best = -1;
         for (const n of map.terr[i].neighbors) if (T[n].owner === pi && fd[n] < fd[i]) { best = n; break; }
         if (best >= 0) applyAction(state, map, pi, { type: 'send', from: i, to: best, n: T[i].troops - 1 });

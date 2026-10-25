@@ -56,9 +56,14 @@ grande au-delà). En multi, ce sont les réglages de l'hôte qui s'appliquent.
 
 ## Bots
 
-Chaque bot estime la puissance des joueurs (territoires, soldats, or) et cherche à gagner : il vise en priorité
-le joueur le plus fort, et s'acharne sur lui s'il domine nettement, au lieu d'attaquer les plus faibles.
-Un bot en tête cherche au contraire à achever ses adversaires. Les bots faciles restent opportunistes.
+Les bots cherchent à gagner, donc à **empêcher le premier de gagner** (le premier = celui qui a le plus de territoires,
+humain ou bot) :
+- dès que le premier a une vraie avance (au moins 2 territoires de plus que le deuxième), les bots normaux et difficiles
+  lui réservent **au moins 70 % de leurs attaques contre des joueurs** (en pratique 90 % et plus) ;
+- ils peuvent l'attaquer même s'il n'est pas leur voisin : l'armée traverse la carte et prend ce qu'il y a sur le chemin ;
+- s'ils ne sont pas assez forts pour frapper, ils accumulent soldats et renforts sur leur base de frappe face à lui ;
+- quand tout le monde est au coude à coude, ils s'étendent et achèvent les joueurs presque éliminés, pour que la partie avance ;
+- un bot qui est lui-même premier cherche à achever ses adversaires. Les bots faciles restent opportunistes.
 
 ## Contrôles
 
