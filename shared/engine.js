@@ -35,18 +35,19 @@
     barracks: { name: 'Caserne', cost: 80, desc: '+1 soldat / 3 s', letter: 'C' },
   };
 
-  const SIZES = { small: 30, medium: 45, large: 65 };
+  const SIZES = { small: 25, medium: 40, large: 60 }; // territoires de la carte aléatoire
   const COLORS = ['#e6194b', '#3c7dd9', '#3cb44b', '#f58231', '#911eb4', '#16b5b5', '#d6c400', '#f032e6'];
 
   // Réglages par défaut ("auto") complétés selon le nombre de joueurs
   function resolveOpts(opts, nPlayers) {
     opts = opts || {};
     const map = opts.map === 'europe' ? 'europe' : 'random';
-    let size = SIZES[opts.size];
-    if (!size) size = Math.max(30, Math.min(70, 20 + nPlayers * 7));
+    // Taille : petite / moyenne / grande, ou auto selon le nombre de joueurs
+    const sizeKey = SIZES[opts.size] ? opts.size : nPlayers <= 3 ? 'small' : nPlayers <= 5 ? 'medium' : 'large';
+    const size = SIZES[sizeKey];
     const speed = [0.75, 1, 1.5].includes(+opts.speed) ? +opts.speed : 1;
     const startGold = opts.startGold === 'auto' || opts.startGold == null || isNaN(+opts.startGold) ? CFG.START_GOLD : Math.max(0, Math.min(1000, +opts.startGold));
-    return { map, size, speed, startGold, buildings: opts.buildings !== false };
+    return { map, sizeKey, size, speed, startGold, buildings: opts.buildings !== false };
   }
 
   // ---------- RNG déterministe ----------
@@ -100,7 +101,7 @@
 
   function generateMap(seed, opts) {
     opts = opts || {};
-    if (opts.map === 'europe') return europeMap(seed);
+    if (opts.map === 'europe') return europeMap(seed, opts.sizeKey);
     const N = opts.size || 45;
     const H = Math.round(Math.sqrt(N * 355 / 1.6)), W = Math.round(H * 1.6);
     const r = mulberry(seed);
@@ -182,8 +183,8 @@
     return buildMap(seed, W, H, cells, defs, []);
   }
 
-  function europeMap(seed) {
-    const d = EUROPE;
+  function europeMap(seed, sizeKey) {
+    const d = EUROPE[sizeKey] || EUROPE.large;
     const cells = new Int16Array(d.w * d.h);
     let p = 0;
     for (let i = 0; i < d.rle.length; i += 2) { cells.fill(d.rle[i], p, p + d.rle[i + 1]); p += d.rle[i + 1]; }
@@ -598,11 +599,20 @@
       incoming[dest] = (incoming[dest] || 0) + a.n;
     }
 
-    // Joueur dominant : les bots normaux/difficiles le ciblent davantage
-    const counts = new Array(state.players.length).fill(0);
-    for (const t of T) if (t.owner >= 0) counts[t.owner]++;
-    let leader = -1, lc = 0;
-    counts.forEach((c, i) => { if (i !== pi && c > lc) { lc = c; leader = i; } });
+    // Puissance de chaque joueur (territoires, soldats, or). Pour gagner, un bot cherche à
+    // empêcher le plus fort de gagner : il le vise en priorité, surtout s'il domine nettement,
+    // au lieu de s'acharner sur les plus faibles. Les bots faciles restent opportunistes.
+    const power = state.players.map(() => 0);
+    T.forEach(t => { if (t.owner >= 0) power[t.owner] += 1 + t.troops / 15; });
+    for (const a of state.armies) power[a.owner] += a.n / 15;
+    state.players.forEach((q, i) => { if (q.alive) power[i] += q.gold / 60; });
+    let rival = -1;
+    power.forEach((v, i) => { if (i !== pi && state.players[i].alive && (rival < 0 || v > power[rival])) rival = i; });
+    const others = power.filter((v, i) => i !== rival && state.players[i].alive);
+    const avgOthers = others.length ? others.reduce((a, b) => a + b, 0) / others.length : 0;
+    const iLead = rival < 0 || power[pi] >= power[rival];
+    const dominant = !iLead && power[rival] > 1.4 * avgOthers;
+    const neutralsLeft = T.filter(t => t.owner === -1).length;
 
     const frontier = [];
     const options = [];
@@ -611,12 +621,25 @@
       if (!enemies.length) continue;
       frontier.push(i);
       for (const n of enemies) {
-        const def = T[n].troops;
+        const def = T[n].troops, o = T[n].owner;
         const need = Math.ceil(def * defenseOf(state, map, n) * margin) + 2 - (incoming[n] || 0);
-        let score = map.terr[n].income * 3 + TERRAIN[map.terr[n].terrain].income * 2 - def * 0.25;
-        if (T[n].owner === -1) score += 1;
-        else if (T[n].owner === leader && level !== 'easy') score += 2;
-        if (T[n].owner >= 0 && state.players[T[n].owner].capital === n) score += 3 + state.players[T[n].owner].gold / 100;
+        let score = map.terr[n].income * 3 + TERRAIN[map.terr[n].terrain].income * 2;
+        const isCap = o >= 0 && state.players[o].capital === n;
+        if (level === 'easy') {
+          score += (o === -1 ? 1 : 0) - def * 0.25;
+        } else if (o === -1) {
+          // s'étendre sur les neutres, surtout en début de partie ; moins quand il faut freiner un dominant
+          score += (neutralsLeft > T.length * 0.3 ? 2 : 0) - (dominant ? 2 : 0) - def * 0.25;
+        } else if (iLead) {
+          // en tête : achever les adversaires les plus faibles pour gagner
+          score += 3 * (1 - power[o] / Math.max(1, power[pi])) - def * 0.2;
+        } else {
+          const rel = power[o] / Math.max(1, power[rival]); // 1 pour le plus fort
+          score += 6 * rel - def * (o === rival ? 0.08 : 0.25);
+          if (o === rival && dominant) score += 5;
+          if (o !== rival && dominant) score -= 3;
+        }
+        if (isCap) score += 3 + state.players[o].gold / 100 + (o === rival && level !== 'easy' ? 4 : 0);
         options.push({ from: i, to: n, need, score });
       }
     }

@@ -14,11 +14,15 @@
       <p class="sub">Conquête de territoires</p>
       <label>Ton nom <input id="name" maxlength="16" placeholder="Joueur"></label>
 
+      <div class="row">
+        <label>Carte <select id="optMap"><option value="random">Aléatoire</option><option value="europe">Europe</option></select></label>
+        <label>Taille <select id="optSize"><option value="auto">Auto</option><option value="small">Petite</option><option value="medium">Moyenne</option><option value="large">Grande</option></select></label>
+      </div>
+      <p class="sub" id="sizeHint"></p>
+
       <details id="settings">
-        <summary>Réglages de la partie <small id="settingsSummary"></small></summary>
+        <summary>Autres réglages <small id="settingsSummary"></small></summary>
         <div class="settings-grid">
-          <label>Carte <select id="optMap"><option value="random">Aléatoire</option><option value="europe">Europe</option></select></label>
-          <label>Taille <select id="optSize"><option value="auto">Auto</option><option value="small">Petite (30)</option><option value="medium">Moyenne (45)</option><option value="large">Grande (65)</option></select></label>
           <label>Vitesse <select id="optSpeed"><option value="0.75">Lente</option><option value="1">Normale</option><option value="1.5">Rapide</option></select></label>
           <label>Or de départ <select id="optGold"><option value="auto">Auto (25)</option><option value="0">0</option><option value="100">100</option><option value="300">300</option></select></label>
           <label>Bâtiments <select id="optBuild"><option value="on">Oui (test)</option><option value="off">Non</option></select></label>

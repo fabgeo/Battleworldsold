@@ -11,10 +11,20 @@ npm start          # http://localhost:3000  (PORT=xxxx pour changer)
 Aucune dépendance : il faut juste Node.js 18+. Pour jouer à plusieurs, les autres joueurs
 ouvrent l'adresse du serveur (ex. `http://<ton-ip>:3000`) et entrent le code de la partie.
 
-## Règles (v0.2)
+## Jouer en ligne (GitHub Pages)
 
-- **Cartes** : aléatoire (30 à 65 territoires d'un seul tenant) ou **Europe** (79 régions tirées des vraies frontières,
-  îles reliées par des passages maritimes en pointillés).
+La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (dossier `docs/`).
+
+- Activation (une seule fois) : *Settings → Pages → Build and deployment → Source : Deploy from a branch*,
+  branche `master`, dossier `/docs`, puis *Save*.
+- Sur téléphone, pour un vrai plein écran : ouvrir la page puis « Ajouter à l'écran d'accueil »
+  (Safari : bouton Partager ; Chrome : menu ⋮). Le jeu s'ouvre alors sans barre de navigateur.
+- Après une modification de `public/` ou `shared/`, régénérer la page : `npm run build`.
+
+## Règles (v0.3)
+
+- **Cartes** : aléatoire (25 / 40 / 60 territoires d'un seul tenant) ou **Europe** tirée des vraies frontières
+  (46 / 64 / 79 régions : la petite taille garde surtout des pays entiers), îles reliées par des passages maritimes en pointillés.
 - **Revenu** : versé toutes les **2 s** : 5 or de base pour chaque joueur, + 1 à 3 par territoire, + 3 pour la capitale (★).
 - Un soldat coûte **5 or** et apparaît sur le territoire choisi.
 - **Terrains** :
@@ -40,8 +50,15 @@ ouvrent l'adresse du serveur (ex. `http://<ton-ip>:3000`) et entrent le code de 
 
 ## Réglages de partie
 
-Carte, taille, vitesse (lente / normale / rapide), or de départ et bâtiments. Tout est sur « Auto » par défaut
-(la taille s'adapte au nombre de joueurs). En multi, ce sont les réglages de l'hôte qui s'appliquent.
+Carte et taille sont directement dans le menu ; vitesse (lente / normale / rapide), or de départ et bâtiments
+sont dans « Autres réglages ». Tout est sur « Auto » par défaut (taille : petite jusqu'à 3 joueurs, moyenne jusqu'à 5,
+grande au-delà). En multi, ce sont les réglages de l'hôte qui s'appliquent.
+
+## Bots
+
+Chaque bot estime la puissance des joueurs (territoires, soldats, or) et cherche à gagner : il vise en priorité
+le joueur le plus fort, et s'acharne sur lui s'il domine nettement, au lieu d'attaquer les plus faibles.
+Un bot en tête cherche au contraire à achever ses adversaires. Les bots faciles restent opportunistes.
 
 ## Contrôles
 
@@ -63,3 +80,4 @@ Carte, taille, vitesse (lente / normale / rapide), or de départ et bâtiments. 
   (`npm i --no-save world-atlas@2 topojson-client@3 && node tools/build-europe.js`).
 - `server.js` : serveur HTTP + salons multijoueur (SSE + POST), autoritaire à 10 ticks/s.
 - `public/` : client (canvas).
+- `tools/build-static.js` : génère `docs/` (version solo en un seul fichier, manifeste et icônes pour l'écran d'accueil).

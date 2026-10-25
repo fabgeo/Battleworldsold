@@ -45,7 +45,8 @@ button.active { background: #2f7de1; }
 #bottombar button { height: 56px; min-width: 64px; padding: 0 14px; font-size: 18px; font-weight: 600; border-radius: 8px; font-variant-numeric: tabular-nums; }
 #bottombar button:disabled { opacity: 0.35; cursor: default; background: #3a434e; }
 /* Réglages */
-details#settings { margin-top: 16px; background: #232930; border-radius: 8px; padding: 10px 12px; }
+#sizeHint { margin: 6px 0 0; font-size: 13px; }
+details#settings { margin-top: 12px; background: #232930; border-radius: 8px; padding: 10px 12px; }
 details#settings summary { cursor: pointer; font-weight: 600; }
 details#settings summary small { color: #9aa5b1; font-weight: 400; margin-left: 6px; }
 .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }

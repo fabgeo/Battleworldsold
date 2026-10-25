@@ -55,20 +55,33 @@
     const o = readOpts();
     return { map: o.map, size: o.size, speed: +o.speed, startGold: o.startGold, buildings: o.buildings === 'on' };
   }
+  // Nombre de territoires selon la carte et la taille
+  function territoryCount(map, sizeKey) {
+    if (map === 'europe') return { small: 46, medium: 64, large: 79 }[sizeKey];
+    return E.SIZES[sizeKey];
+  }
   function describeOpts(o) {
     const parts = [o.map === 'europe' ? 'Europe' : 'Carte aléatoire'];
-    if (o.map !== 'europe') parts.push(o.size && o.size !== 'auto' ? { small: 'petite', medium: 'moyenne', large: 'grande' }[o.size] : 'taille auto');
+    parts.push(o.size && o.size !== 'auto' ? { small: 'petite', medium: 'moyenne', large: 'grande' }[o.size] : 'taille auto');
     if (o.speed != null && +o.speed !== 1) parts.push(+o.speed < 1 ? 'lente' : 'rapide');
     if (o.startGold != null && o.startGold !== 'auto') parts.push(o.startGold + ' or au départ');
     if (o.buildings === false || o.buildings === 'off') parts.push('sans bâtiments');
     return parts.join(' · ');
   }
   function syncOpts() {
-    $('optSize').disabled = $('optMap').value === 'europe';
-    $('settingsSummary').textContent = describeOpts(readOpts());
+    const o = readOpts();
+    const players = 1 + (+$('botCount').value || 3);
+    const key = o.size === 'auto' ? E.resolveOpts({ size: 'auto' }, players).sizeKey : o.size;
+    $('sizeHint').textContent = `${territoryCount(o.map, key)} territoires` + (o.size === 'auto' ? ` (auto pour ${players} joueurs)` : '');
+    const extra = [];
+    if (+o.speed !== 1) extra.push(+o.speed < 1 ? 'lente' : 'rapide');
+    if (o.startGold !== 'auto') extra.push(o.startGold + ' or');
+    if (o.buildings === 'off') extra.push('sans bâtiments');
+    $('settingsSummary').textContent = extra.join(' · ');
     store.set('bw-opts', JSON.stringify(readOpts()));
   }
   for (const k in OPT_IDS) $(OPT_IDS[k]).addEventListener('change', syncOpts);
+  $('botCount').addEventListener('change', syncOpts);
   $('btnResetOpts').onclick = () => { for (const k in OPT_IDS) $(OPT_IDS[k]).value = OPT_DEFAULT[k]; syncOpts(); };
   loadOpts();
 

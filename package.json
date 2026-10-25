@@ -4,7 +4,8 @@
   "description": "Jeu de conquête de territoires avec bots et multijoueur",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "node tools/build-static.js"
   },
   "license": "MIT"
 }

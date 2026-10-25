@@ -1,0 +1,25 @@
+{
+  "name": "Battleworlds",
+  "short_name": "Battleworlds",
+  "description": "Conquête de territoires contre des bots",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#1d2228",
+  "theme_color": "#1d2228",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
