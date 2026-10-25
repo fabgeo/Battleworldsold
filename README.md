@@ -25,7 +25,7 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
 
 - **Cartes** : aléatoire (25 / 40 / 60 territoires d'un seul tenant) ou **Europe** tirée des vraies frontières
   (46 / 64 / 79 régions : la petite taille garde surtout des pays entiers), îles reliées par des passages maritimes en pointillés.
-- **Revenu** : versé toutes les **2 s** : 5 or de base pour chaque joueur, + 1 à 3 par territoire, + 3 pour la capitale (★).
+- **Revenu** : versé toutes les **4 s** (rythme posé, pour laisser le temps de réfléchir à la stratégie) : 5 or de base pour chaque joueur, + 1 à 3 par territoire, + 3 pour la capitale (★).
 - Un soldat coûte **5 or** et apparaît sur le territoire choisi.
 - **Terrains** :
 
@@ -80,7 +80,18 @@ humain ou bot) :
 - Barre du bas : achat (+1, +5, +10, Max), **Bâtir**, et part des troupes envoyées (25 à 100 %).
 - Barre du haut : Quitter, Recommencer, **Pause** (solo), **Plein écran**. En plein écran, la carte prend tout l'écran ;
   téléphone à l'horizontale : boutons en colonnes à gauche et à droite de la carte.
-- `B` : acheter le maximum. `1`–`4` : 25/50/75/100 %. `P` : pause. Échap ou clic droit : désélection.
+- **Raccourcis clavier (PC)**, visibles et modifiables via « Raccourcis clavier » (menu) ou le bouton ⌨ en jeu ;
+  ils sont mémorisés dans le navigateur. Les achats et constructions au clavier visent le territoire sélectionné,
+  ou à défaut celui sous la souris (pas besoin de cliquer). Par défaut :
+
+  | Action | Touche |
+  |---|---|
+  | Envoyer 25 / 50 / 75 / 100 % | `1` `2` `3` `4` (ou `&` `é` `"` `'` en AZERTY) |
+  | Acheter +1 / +5 / +10 / maximum | `A` `Z` `E` `B` |
+  | Construire Fort / Mine / Caserne | `F` `M` `C` |
+  | Sélectionner ma capitale | `H` |
+  | Désélectionner | `Échap` (ou clic droit) |
+  | Pause (solo) | `P` |
 - Molette ou pincement à deux doigts : zoom de la carte. Glisser hors des ronds : déplacer la vue.
 
 ## Structure

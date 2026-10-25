@@ -488,11 +488,25 @@
     if (n > 0) act({ type: 'send', from, to, n });
   }
 
-  function buy(what) {
-    if (G.selected < 0) return;
+  // Territoire visé par un achat/une construction : la sélection, ou à défaut (clavier) le territoire sous la souris
+  function actionTarget(useHover) {
+    if (G.selected >= 0) return G.selected;
+    if (useHover && G.hover >= 0 && G.state.territories[G.hover].owner === G.me) return G.hover;
+    return -1;
+  }
+  function buy(what, useHover) {
+    const t = actionTarget(useHover);
+    if (t < 0) return;
     const n = what === 'max' ? Math.floor(G.state.players[G.me].gold / E.CFG.SOLDIER_COST) : +what;
-    act({ type: 'buy', t: G.selected, n });
+    act({ type: 'buy', t, n });
     G.selected = -1; // après une action, la sélection s'enlève (évite d'envoyer des troupes au clic suivant)
+  }
+  function build(kind, useHover) {
+    const t = actionTarget(useHover);
+    if (t < 0) return;
+    act({ type: 'build', t, kind });
+    setBuildOpen(false);
+    G.selected = -1;
   }
 
   document.querySelectorAll('[data-buy]').forEach(b => b.onclick = () => buy(b.dataset.buy));
@@ -511,15 +525,91 @@
   }
   $('btnBuild').onclick = () => setBuildOpen(!G.buildOpen);
   document.querySelectorAll('[data-build]').forEach(b => {
-    b.onclick = () => { act({ type: 'build', t: G.selected, kind: b.dataset.build }); setBuildOpen(false); G.selected = -1; };
+    b.onclick = () => build(b.dataset.build);
   });
 
+  // ---------- Raccourcis clavier (modifiables, mémorisés dans le navigateur) ----------
+  // Une touche = { key, code } : on reconnaît la lettre tapée (key) ou la touche physique (code),
+  // pour que les chiffres du haut du clavier marchent aussi en AZERTY sans Maj.
+  const KEY_ACTIONS = [
+    { group: 'Envoi de troupes' },
+    { id: 'pct25', label: 'Envoyer 25 %', def: { key: '1', code: 'Digit1' }, run: () => setPct(0.25) },
+    { id: 'pct50', label: 'Envoyer 50 %', def: { key: '2', code: 'Digit2' }, run: () => setPct(0.5) },
+    { id: 'pct75', label: 'Envoyer 75 %', def: { key: '3', code: 'Digit3' }, run: () => setPct(0.75) },
+    { id: 'pct100', label: 'Envoyer 100 %', def: { key: '4', code: 'Digit4' }, run: () => setPct(1) },
+    { group: 'Achat de soldats' },
+    { id: 'buy1', label: 'Acheter +1', def: { key: 'a', code: '' }, run: () => buy(1, true) },
+    { id: 'buy5', label: 'Acheter +5', def: { key: 'z', code: '' }, run: () => buy(5, true) },
+    { id: 'buy10', label: 'Acheter +10', def: { key: 'e', code: '' }, run: () => buy(10, true) },
+    { id: 'buyMax', label: 'Acheter le maximum', def: { key: 'b', code: '' }, run: () => buy('max', true) },
+    { group: 'Bâtiments' },
+    { id: 'buildFort', label: 'Construire un Fort', def: { key: 'f', code: '' }, run: () => build('fort', true) },
+    { id: 'buildMine', label: 'Construire une Mine', def: { key: 'm', code: '' }, run: () => build('mine', true) },
+    { id: 'buildBarracks', label: 'Construire une Caserne', def: { key: 'c', code: '' }, run: () => build('barracks', true) },
+    { group: 'Divers' },
+    { id: 'capital', label: 'Sélectionner ma capitale', def: { key: 'h', code: '' }, run: selectCapital },
+    { id: 'deselect', label: 'Désélectionner', def: { key: 'Escape', code: 'Escape' }, run: () => { G.selected = -1; setBuildOpen(false); } },
+    { id: 'pause', label: 'Pause (solo)', def: { key: 'p', code: '' }, run: () => { if (G.mode === 'solo') setPaused(!G.paused); } },
+  ];
+  let keys = {};
+  function loadKeys() {
+    let saved = {};
+    try { saved = JSON.parse(store.get('bw-keys') || '{}') || {}; } catch (e) {}
+    keys = {};
+    for (const a of KEY_ACTIONS) if (a.id) keys[a.id] = saved[a.id] !== undefined ? saved[a.id] : a.def;
+  }
+  loadKeys();
+  const keyLabel = (k) => {
+    if (!k || !k.key) return '—';
+    const names = { ' ': 'Espace', Escape: 'Échap', Enter: 'Entrée', Tab: 'Tab', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
+    return names[k.key] || (k.key.length === 1 ? k.key.toUpperCase() : k.key);
+  };
+  const matches = (k, e) => k && k.key && (e.key.toLowerCase() === k.key.toLowerCase() || (k.code && e.code === k.code));
+
+  function selectCapital() {
+    const c = G.state.players[G.me].capital;
+    if (c != null && G.state.territories[c].owner === G.me) G.selected = c;
+  }
+
+  let waitingFor = null; // action en cours de modification
+  function renderKeys() {
+    $('keysTable').innerHTML = KEY_ACTIONS.map(a => a.group
+      ? `<tr class="group"><td colspan="2">${a.group}</td></tr>`
+      : `<tr><td>${a.label}</td><td><button data-key="${a.id}" class="${waitingFor === a.id ? 'waiting' : ''}">${waitingFor === a.id ? 'Appuie…' : keyLabel(keys[a.id])}</button></td></tr>`).join('');
+    document.querySelectorAll('[data-key]').forEach(b => b.onclick = () => { waitingFor = b.dataset.key; renderKeys(); });
+  }
+  let pausedByKeys = false; // la fenêtre a mis la partie en pause : on la relance en la fermant
+  function openKeys(open) {
+    waitingFor = null;
+    $('keysOverlay').classList.toggle('hidden', !open);
+    if (open) {
+      pausedByKeys = !!(G.state && G.mode === 'solo' && !G.paused && G.state.winner == null);
+      if (pausedByKeys) setPaused(true);
+      renderKeys();
+    } else if (pausedByKeys) { pausedByKeys = false; setPaused(false); }
+  }
+  $('btnKeys').onclick = () => openKeys(true);
+  $('btnKeysMenu').onclick = () => openKeys(true);
+  $('btnKeysClose').onclick = () => openKeys(false);
+  $('btnKeysReset').onclick = () => { store.set('bw-keys', '{}'); loadKeys(); waitingFor = null; renderKeys(); };
+
   window.addEventListener('keydown', (e) => {
-    if (!G.state || e.target.tagName === 'INPUT') return;
-    if (e.key === 'Escape') { G.selected = -1; setBuildOpen(false); }
-    if (e.key === 'b' || e.key === 'B') buy('max');
-    if ((e.key === 'p' || e.key === 'P') && G.mode === 'solo') setPaused(!G.paused);
-    if (['1', '2', '3', '4'].includes(e.key)) setPct(+e.key * 0.25);
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    // modification d'une touche
+    if (waitingFor) {
+      e.preventDefault();
+      const k = e.key === 'Backspace' || e.key === 'Delete' ? { key: '', code: '' } : { key: e.key, code: e.code };
+      // une touche ne sert qu'à une action : on la retire des autres
+      if (k.key) for (const id in keys) if (id !== waitingFor && matches(keys[id], e)) keys[id] = { key: '', code: '' };
+      keys[waitingFor] = k;
+      store.set('bw-keys', JSON.stringify(keys));
+      waitingFor = null;
+      renderKeys();
+      return;
+    }
+    if (!$('keysOverlay').classList.contains('hidden')) { if (e.key === 'Escape') openKeys(false); return; }
+    if (!G.state || e.ctrlKey || e.metaKey || e.altKey) return;
+    for (const a of KEY_ACTIONS) if (a.id && matches(keys[a.id], e)) { e.preventDefault(); a.run(); return; }
   });
 
   // Pause (solo)

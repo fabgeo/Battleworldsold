@@ -15,7 +15,7 @@
     ARMY_SPEED: 12,        // cases par seconde sur plaine
     FATIGUE: 0.05,         // perte par étape au-delà des étapes gratuites
     FREE_LEGS: 2,
-    INCOME_EVERY: 2,       // secondes entre deux versements d'or
+    INCOME_EVERY: 4,       // secondes entre deux versements d'or (lent : laisse le temps de réfléchir)
     SEA_SLOW: 2,           // un passage maritime est 2 fois plus lent
     BARRACKS_EVERY: 3,     // secondes entre deux soldats produits par une caserne
     HISTORY_EVERY: 5,      // secondes entre deux points des statistiques

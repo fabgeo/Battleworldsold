@@ -36,6 +36,7 @@
         <label>Niveau <select id="botLevel"><option value="easy">Facile</option><option value="normal" selected>Normal</option><option value="hard">Difficile</option></select></label>
       </div>
       <button id="btnSolo" class="primary">Jouer en solo</button>
+      <button id="btnKeysMenu" class="link keys-link">Raccourcis clavier (PC)</button>
 
       <div id="multiBlock">
       <h2>Multijoueur</h2>
@@ -77,6 +78,7 @@
         <button id="btnRestart" title="Recommencer"><span class="ico">↻</span><span class="lbl">Recommencer</span></button>
         <button id="btnPause" title="Pause"><span class="ico">❚❚</span><span class="lbl">Pause</span></button>
         <button id="btnFull" title="Plein écran"><span class="ico">⤢</span><span class="lbl">Plein écran</span></button>
+        <button id="btnKeys" class="pc-only" title="Raccourcis clavier"><span class="ico">⌨</span><span class="lbl">Raccourcis</span></button>
       </div>
       <div id="hud">
         <div class="stat"><span>Or</span><b id="hudGold">0</b></div>
@@ -99,6 +101,18 @@
       </div>
       <div class="group"><span>Envoi</span>
         <button data-pct="25">25%</button><button data-pct="50">50%</button><button data-pct="75">75%</button><button data-pct="100">100%</button>
+      </div>
+    </div>
+    <div id="keysOverlay" class="overlay hidden">
+      <div class="card">
+        <h2>Raccourcis clavier</h2>
+        <p class="sub">Les achats et constructions s'appliquent au territoire sélectionné, ou à défaut à celui sous la souris.
+          Clique sur une touche pour la changer, puis appuie sur la nouvelle touche (Retour arrière : aucune touche).</p>
+        <table id="keysTable"></table>
+        <div class="row">
+          <button id="btnKeysReset">Touches par défaut</button>
+          <button id="btnKeysClose" class="primary">Fermer</button>
+        </div>
       </div>
     </div>
     <div id="pauseOverlay" class="overlay hidden"><div class="card"><h2>Pause</h2><button id="btnResume" class="primary">Reprendre</button></div></div>
