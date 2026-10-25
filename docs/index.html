@@ -178,6 +178,14 @@ button.link:hover { background: none; text-decoration: underline; }
   #game:not(.immersive) #bottombar button { height: 68px; min-width: 82px; padding: 0 18px; font-size: 21px; border-radius: 10px; }
   #game:not(.immersive) #buildMenu { bottom: 112px; left: 50%; right: auto; transform: translateX(-50%); }
 }
+
+/* Choix du territoire de départ */
+#chooseBanner { position: absolute; top: 62px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: #1d2228f0; border: 1px solid #2f7de1; border-radius: 12px; padding: 10px 16px; text-align: center; max-width: calc(100% - 24px); }
+#chooseBanner b { font-size: 17px; }
+#chooseBanner small { color: #9aa5b1; font-size: 13px; }
+#chooseBanner button { margin-top: 6px; padding: 6px 14px; font-size: 14px; }
+#game.immersive #chooseBanner { top: max(56px, env(safe-area-inset-top, 0px)); }
 </style>
 
   <!-- Menu -->
@@ -261,6 +269,11 @@ button.link:hover { background: none; text-decoration: underline; }
       </div>
     </div>
     <div id="scoreboard"></div>
+    <div id="chooseBanner" class="hidden">
+      <b>Choisis ton territoire de départ</b>
+      <small>La partie commence dès que tu cliques sur un territoire. Les bots se placeront loin de toi.</small>
+      <button id="btnRandomStart">Au hasard</button>
+    </div>
     <div id="buildMenu" class="hidden">
       <button data-build="fort"><b>Fort</b><small>Défense ×1,5</small><i></i></button>
       <button data-build="mine"><b>Mine</b><small>+2 or par versement</small><i></i></button>
@@ -346,21 +359,30 @@ button.link:hover { background: none; text-decoration: underline; }
   const TERRAIN = {
     plain: { name: 'Plaine', def: 1, speed: 1, income: 0 },
     forest: { name: 'Forêt', def: 1.25, speed: 0.7, income: 0 },
-    mountain: { name: 'Montagne', def: 1.6, speed: 0.5, income: 0 },
+    mountain: { name: 'Montagne', def: 1.6, speed: 0.5, income: 1 }, // mines de montagne : un peu plus d'or
     city: { name: 'Ville', def: 1.1, speed: 1, income: 2 },
   };
 
   const BUILDINGS = {
-    fort: { name: 'Fort', cost: 35, desc: 'Défense ×1,5', letter: 'F' },
+    fort: { name: 'Fort', cost: 20, desc: '+50 % de défense', letter: 'F' },
     mine: { name: 'Mine', cost: 25, desc: '+2 or par versement', letter: 'M' },
-    barracks: { name: 'Caserne', cost: 45, desc: '+1 soldat / 3 s', letter: 'C' },
+    barracks: { name: 'Caserne', cost: 40, desc: '+1 soldat / 3 s', letter: 'C' },
   };
-  const BUILD_STEP = 0.35; // chaque bâtiment déjà construit par le joueur rend le suivant 35 % plus cher
+  const BUILD_STEP = 0.2; // chaque bâtiment d'un type acheté rend le suivant du même type 20 % plus cher
 
-  // Prix d'un bâtiment pour un joueur : bas pour les premiers, puis de plus en plus cher
+  // Prix d'un bâtiment pour un joueur : +20 % par bâtiment de ce type déjà acheté (les autres types ne bougent pas)
   function buildCost(state, pi, kind) {
-    const built = state.players[pi] ? state.players[pi].stats.built : 0;
-    return Math.round(BUILDINGS[kind].cost * (1 + BUILD_STEP * built));
+    const p = state.players[pi];
+    const n = p && p.stats.builtKind ? p.stats.builtKind[kind] || 0 : 0;
+    return Math.round(BUILDINGS[kind].cost * Math.pow(1 + BUILD_STEP, n));
+  }
+
+  // Nombre de bâtiments d'un type sur un territoire, et maximum autorisé :
+  // 1 de chaque type, sauf dans une capitale (★) : 3 de chaque, mais 2 forts au plus
+  const countOf = (t, kind) => t.buildings.reduce((n, k) => n + (k === kind), 0);
+  function maxBuildings(state, ti, kind) {
+    const isCap = (state.capitals || []).includes(ti);
+    return isCap ? (kind === 'fort' ? 2 : 3) : 1;
   }
 
   const SIZES = { small: 25, medium: 40, large: 60 }; // territoires de la carte aléatoire
@@ -635,7 +657,8 @@ button.link:hover { background: none; text-decoration: underline; }
 
   // ---------- Partie ----------
   // players: [{ id, name, bot: false | 'easy'|'normal'|'hard' }]
-  function createGame(map, players, seed, opts) {
+  // start : territoire de départ choisi par le joueur 0 (facultatif)
+  function createGame(map, players, seed, opts, start) {
     opts = resolveOpts(opts, players.length);
     const state = {
       time: 0, rng: seed | 0, incomeAcc: 0, sec: 0, nextArmy: 1, winner: null, opts,
@@ -650,7 +673,10 @@ button.link:hover { background: none; text-decoration: underline; }
     const dists = [];
     for (let i = 0; i < players.length; i++) {
       let pick;
-      if (i === 0) pick = Math.floor(srand(state) * map.terr.length);
+      if (i === 0) {
+        pick = Math.floor(srand(state) * map.terr.length);
+        if (start >= 0 && start < map.terr.length) pick = start;
+      }
       else {
         let best = -1, bs = -1;
         for (let t = 0; t < map.terr.length; t++) {
@@ -669,7 +695,7 @@ button.link:hover { background: none; text-decoration: underline; }
       state.players.push({
         id: p.id, name: p.name, bot: p.bot || false, color: COLORS[i % COLORS.length],
         gold: opts.startGold, alive: true, capital: caps[i], nextThink: 1 + srand(state),
-        stats: { bought: 0, captures: 0, lost: 0, peakTerr: 1, capitals: 0, built: 0 },
+        stats: { bought: 0, captures: 0, lost: 0, peakTerr: 1, capitals: 0, built: 0, builtKind: {} },
       });
       state.territories[caps[i]].owner = i;
       state.territories[caps[i]].troops = CFG.START_TROOPS;
@@ -690,7 +716,7 @@ button.link:hover { background: none; text-decoration: underline; }
     state.territories.forEach((t, i) => {
       if (t.owner !== pi) return;
       inc += map.terr[i].income + TERRAIN[map.terr[i].terrain].income;
-      if (t.buildings.includes('mine')) inc += 2;
+      inc += 2 * countOf(t, 'mine');
     });
     if (state.players[pi].capital != null && state.territories[state.players[pi].capital].owner === pi) inc += CFG.CAPITAL_BONUS;
     return inc;
@@ -698,7 +724,7 @@ button.link:hover { background: none; text-decoration: underline; }
 
   // Multiplicateur de défense d'un territoire (terrain + fort)
   function defenseOf(state, map, i) {
-    return CFG.DEF_BONUS * TERRAIN[map.terr[i].terrain].def * (state.territories[i].buildings.includes('fort') ? 1.5 : 1);
+    return CFG.DEF_BONUS * TERRAIN[map.terr[i].terrain].def * (1 + 0.5 * countOf(state.territories[i], 'fort'));
   }
 
   function crossingPoint(map, a, b) {
@@ -773,13 +799,13 @@ button.link:hover { background: none; text-decoration: underline; }
     }
     if (act.type === 'build') {
       const t = state.territories[act.t], b = BUILDINGS[act.kind];
-      // plusieurs bâtiments par territoire, mais un seul de chaque type
-      if (!state.opts.buildings || !t || !b || t.owner !== pi || t.buildings.includes(act.kind)) return false;
+      if (!state.opts.buildings || !t || !b || t.owner !== pi || countOf(t, act.kind) >= maxBuildings(state, act.t, act.kind)) return false;
       const cost = buildCost(state, pi, act.kind);
       if (p.gold < cost) return false;
       p.gold -= cost;
       t.buildings.push(act.kind);
       p.stats.built++;
+      p.stats.builtKind[act.kind] = (p.stats.builtKind[act.kind] || 0) + 1;
       return true;
     }
     if (act.type === 'send') {
@@ -859,7 +885,7 @@ button.link:hover { background: none; text-decoration: underline; }
       state.incomeAcc -= 1;
       state.sec++;
       if (state.sec % CFG.INCOME_EVERY === 0) state.players.forEach((p, i) => { if (p.alive) p.gold += incomeOf(state, map, i); });
-      if (state.sec % CFG.BARRACKS_EVERY === 0) for (const t of state.territories) if (t.owner >= 0 && t.buildings.includes('barracks')) t.troops++;
+      if (state.sec % CFG.BARRACKS_EVERY === 0) for (const t of state.territories) if (t.owner >= 0) t.troops += countOf(t, 'barracks');
       if (state.sec % CFG.HISTORY_EVERY === 0) recordHistory(state);
     }
 
@@ -924,6 +950,14 @@ button.link:hover { background: none; text-decoration: underline; }
     T.forEach((t, i) => { if (t.owner === pi) mine.push(i); });
     if (!mine.length) return;
     if (!p.atk) p.atk = { lead: 0, other: 0 }; // compteur d'attaques contre le premier / contre les autres joueurs
+    // Comme un humain qui clique : un nombre limité d'actions (envoi, achat, construction) à chaque réflexion
+    let budget = { easy: 1, normal: 2, hard: 3 }[level] || 2;
+    const doAct = (act) => {
+      if (budget <= 0) return false;
+      const ok = applyAction(state, map, pi, act);
+      if (ok) budget--;
+      return ok;
+    };
 
     const incoming = {}; // troupes déjà envoyées par moi vers un territoire
     for (const a of state.armies) if (a.owner === pi) {
@@ -955,7 +989,7 @@ button.link:hover { background: none; text-decoration: underline; }
 
     const launch = (from, to, n) => {
       const owner = T[to].owner;
-      if (!applyAction(state, map, pi, { type: 'send', from, to, n })) return false;
+      if (!doAct({ type: 'send', from, to, n })) return false;
       if (owner === first) p.atk.lead++; else if (owner >= 0 && !nearlyOut(owner)) p.atk.other++;
       return true;
     };
@@ -1041,13 +1075,14 @@ button.link:hover { background: none; text-decoration: underline; }
     }
 
     // 3. Bâtiments : une mine à l'arrière quand on est riche, un fort sur la capitale menacée
-    if (state.opts.buildings && level !== 'easy' && p.gold > buildCost(state, pi, 'mine') + 80 && srand(state) < 0.35) {
+    if (state.opts.buildings && level !== 'easy' && budget > 0 && p.gold > buildCost(state, pi, 'mine') + 80 && srand(state) < 0.35) {
       const kind = srand(state) < 0.7 ? 'mine' : 'barracks';
-      const interior = mine.filter(i => !T[i].buildings.includes(kind) && !frontier.includes(i));
-      if (p.capital != null && T[p.capital].owner === pi && !T[p.capital].buildings.includes('fort') && frontier.includes(p.capital)) {
-        applyAction(state, map, pi, { type: 'build', t: p.capital, kind: 'fort' });
+      const canBuild = (i, k) => countOf(T[i], k) < maxBuildings(state, i, k);
+      const interior = mine.filter(i => canBuild(i, kind) && !frontier.includes(i));
+      if (p.capital != null && T[p.capital].owner === pi && canBuild(p.capital, 'fort') && frontier.includes(p.capital)) {
+        doAct({ type: 'build', t: p.capital, kind: 'fort' });
       } else if (interior.length) {
-        applyAction(state, map, pi, { type: 'build', t: interior[Math.floor(srand(state) * interior.length)], kind });
+        doAct({ type: 'build', t: interior[Math.floor(srand(state) * interior.length)], kind });
       }
     }
 
@@ -1070,13 +1105,13 @@ button.link:hover { background: none; text-decoration: underline; }
         if (v > bestVal) { bestVal = v; target = o; }
       }
       if (threatT >= 0 && level !== 'easy' && threat > (strike ? 12 : 3) && (!target || threat > 8)) {
-        applyAction(state, map, pi, { type: 'buy', t: threatT, n: Math.min(affordable, Math.ceil(threat / defenseOf(state, map, threatT)) + 2) });
+        doAct({ type: 'buy', t: threatT, n: Math.min(affordable, Math.ceil(threat / defenseOf(state, map, threatT)) + 2) });
       } else if (strike) {
-        applyAction(state, map, pi, { type: 'buy', t: strike.from, n: affordable });
+        doAct({ type: 'buy', t: strike.from, n: affordable });
       } else if (target) {
-        applyAction(state, map, pi, { type: 'buy', t: target.from, n: Math.min(affordable, target.need - (T[target.from].troops - 1)) });
+        doAct({ type: 'buy', t: target.from, n: Math.min(affordable, target.need - (T[target.from].troops - 1)) });
       } else if (frontier.length && affordable >= 3) {
-        applyAction(state, map, pi, { type: 'buy', t: frontier[Math.floor(srand(state) * frontier.length)], n: affordable });
+        doAct({ type: 'buy', t: frontier[Math.floor(srand(state) * frontier.length)], n: affordable });
       }
     }
 
@@ -1093,18 +1128,19 @@ button.link:hover { background: none; text-decoration: underline; }
       for (let k = 0; k < q.length; k++) {
         for (const n of map.terr[q[k]].neighbors) if (T[n].owner === pi && fd[n] === Infinity) { fd[n] = fd[q[k]] + 1; q.push(n); }
       }
-      for (const i of mine) {
+      for (const i of mine.slice().sort((x, y) => T[y].troops - T[x].troops)) {
+        if (budget <= 0) break;
         if (fd[i] === 0 || fd[i] === Infinity || T[i].troops < 3) continue;
         // un territoire du front garde ses troupes s'il est menacé par un voisin
         if (frontier.includes(i) && map.terr[i].neighbors.some(n => T[n].owner >= 0 && T[n].owner !== pi && T[n].troops > T[i].troops)) continue;
         let best = -1;
         for (const n of map.terr[i].neighbors) if (T[n].owner === pi && fd[n] < fd[i]) { best = n; break; }
-        if (best >= 0) applyAction(state, map, pi, { type: 'send', from: i, to: best, n: T[i].troops - 1 });
+        if (best >= 0) doAct({ type: 'send', from: i, to: best, n: T[i].troops - 1 });
       }
     }
   }
 
-  return { CFG, COLORS, TERRAIN, BUILDINGS, SIZES, buildCost, resolveOpts, generateMap, createGame, applyAction, step, incomeOf, defenseOf, travelTime, isSea, findPath, legPos, crossingPoint };
+  return { CFG, COLORS, TERRAIN, BUILDINGS, SIZES, buildCost, maxBuildings, countOf, resolveOpts, generateMap, createGame, applyAction, step, incomeOf, defenseOf, travelTime, isSea, findPath, legPos, crossingPoint };
 });
 
 </script>
@@ -1206,9 +1242,23 @@ button.link:hover { background: none; text-decoration: underline; }
     const resolved = E.resolveOpts(opts, players.length);
     G.mode = 'solo';
     setupGame(seed, resolved);
-    G.state = E.createGame(G.map, players, seed ^ 0x5bd1e995, resolved);
     G.me = 0;
+    // Le joueur choisit son territoire de départ : on affiche la carte neutre, la partie commence au premier clic
+    G.state = E.createGame(G.map, players, seed ^ 0x5bd1e995, resolved);
+    G.state.territories.forEach(t => { t.owner = -1; });
+    G.state.players.forEach(pl => { pl.capital = null; });
+    G.state.capitals = [];
+    G.choosing = { players, seed: seed ^ 0x5bd1e995, opts: resolved };
+    $('chooseBanner').classList.remove('hidden');
   }
+  function chooseStart(t) {
+    const c = G.choosing;
+    G.choosing = null;
+    $('chooseBanner').classList.add('hidden');
+    G.state = E.createGame(G.map, c.players, c.seed, c.opts, t);
+    G.selected = -1;
+  }
+  $('btnRandomStart').onclick = () => { if (G.choosing) chooseStart(-1); };
 
   // ---------- Multi ----------
   async function post(route, body) {
@@ -1275,13 +1325,15 @@ button.link:hover { background: none; text-decoration: underline; }
   }
 
   function act(action) {
-    if (!G.state || G.state.winner != null || G.paused) return;
+    if (!G.state || G.state.winner != null || G.paused || G.choosing) return;
     if (G.mode === 'solo') E.applyAction(G.state, G.map, G.me, action);
     else post('action', withSession({ action })).catch(() => {});
   }
 
   // ---------- Préparation de la partie ----------
   function setupGame(seed, opts) {
+    G.choosing = null;
+    $('chooseBanner').classList.add('hidden');
     G.map = E.generateMap(seed, opts);
     G.selected = -1; G.hover = -1; G.baseKey = ''; G.overDismissed = false; G.overShown = false; G.finalShown = false;
     G.paused = false; setBuildOpen(false);
@@ -1538,8 +1590,9 @@ button.link:hover { background: none; text-decoration: underline; }
     if (!d || !G.state || e.type === 'pointercancel') return;
     const t = pick(e);
     if (!d.moved) {
-      if (d.button === 2) { G.selected = -1; return; }
-      if (d.button === 0) onClick(t);
+      if (G.choosing) { if (d.button === 0 && t >= 0) chooseStart(t); return; }
+      if (d.button === 2) { onRightClick(t); return; }
+      if (d.button === 0) onClick(t, e.pointerType === 'mouse');
     } else if (d.from >= 0 && t >= 0 && t !== d.from) {
       sendTroops(d.from, t);
     }
@@ -1575,17 +1628,25 @@ button.link:hover { background: none; text-decoration: underline; }
     G.view.cy = Math.max(0, Math.min(G.map.h, G.view.cy));
   }
 
-  // Clic : sélectionner un de mes territoires, puis cliquer n'importe quelle cible pour y envoyer des troupes
-  function onClick(t) {
+  // Clic : sélectionner un de mes territoires, puis cliquer une cible pour y envoyer des troupes.
+  // À la souris : clic gauche = attaquer (sur un de mes territoires, il le sélectionne), clic droit = renforcer
+  // un de mes territoires. Au doigt, toucher n'importe quelle cible envoie les troupes (attaque ou renfort).
+  function onClick(t, mouse) {
     if (t < 0) { G.selected = -1; return; }
     const st = G.state, sel = G.selected;
     if (t === sel) { G.selected = -1; return; }
-    if (sel >= 0 && st.territories[sel].owner === G.me) {
+    const ownSel = sel >= 0 && st.territories[sel].owner === G.me;
+    if (ownSel && !(mouse && st.territories[t].owner === G.me)) {
       sendTroops(sel, t);
       G.selected = -1;
       return;
     }
     G.selected = t;
+  }
+  function onRightClick(t) {
+    const st = G.state, sel = G.selected;
+    if (sel >= 0 && t >= 0 && t !== sel && st.territories[sel].owner === G.me && st.territories[t].owner === G.me) sendTroops(sel, t);
+    G.selected = -1;
   }
 
   function sendCount(from) {
@@ -1829,15 +1890,16 @@ button.link:hover { background: none; text-decoration: underline; }
       const caps = st.capitals || st.players.map(pl => pl.capital);
       if (caps.includes(i)) drawStar(x, y - r - R * 0.35, R * 0.62);
       ctx.font = font(R * 0.75, 700); ctx.fillStyle = 'rgba(30,25,15,0.85)';
-      const inc = T.income + E.TERRAIN[T.terrain].income + (t.buildings.includes('mine') ? 2 : 0);
+      const inc = T.income + E.TERRAIN[T.terrain].income + 2 * E.countOf(t, 'mine');
       ctx.fillText('+' + inc, x, y + r + R * 0.55);
-      // un petit badge par bâtiment, empilés à droite de l'étiquette
-      t.buildings.forEach((k, j) => {
-        const bs = R * 0.85, bx = x + r + bs * 0.55, by = y - r * 0.6 + j * (bs + 2 * DPR);
+      // un badge par type de bâtiment (avec le nombre s'il y en a plusieurs), empilés à droite de l'étiquette
+      Object.keys(E.BUILDINGS).filter(k => t.buildings.includes(k)).forEach((k, j) => {
+        const n = E.countOf(t, k), txt = E.BUILDINGS[k].letter + (n > 1 ? n : '');
+        const bh = R * 0.85, bw = bh * (txt.length > 1 ? 1.5 : 1), bx = x + r + bw * 0.55, by = y - r * 0.6 + j * (bh + 2 * DPR);
         ctx.fillStyle = '#1d2228'; ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 1.5 * DPR;
-        ctx.beginPath(); ctx.rect(bx - bs / 2, by - bs / 2, bs, bs); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.rect(bx - bw / 2, by - bh / 2, bw, bh); ctx.fill(); ctx.stroke();
         ctx.fillStyle = '#ffd84a'; ctx.font = font(R * 0.65, 700);
-        ctx.fillText(E.BUILDINGS[k].letter, bx, by + 1);
+        ctx.fillText(txt, bx, by + 1);
       });
     });
 
@@ -1885,8 +1947,9 @@ button.link:hover { background: none; text-decoration: underline; }
     const st = G.state, m = G.map, t = st.territories[i], T = m.terr[i];
     const owner = t.owner >= 0 ? st.players[t.owner].name : 'Neutre';
     const ter = E.TERRAIN[T.terrain].name;
-    const inc = T.income + E.TERRAIN[T.terrain].income + (t.buildings.includes('mine') ? 2 : 0);
-    const bld = t.buildings.length ? ' · ' + t.buildings.map(k => E.BUILDINGS[k].name).join(', ') : '';
+    const inc = T.income + E.TERRAIN[T.terrain].income + 2 * E.countOf(t, 'mine');
+    const bld = t.buildings.length ? ' · ' + Object.keys(E.BUILDINGS).filter(k => t.buildings.includes(k))
+      .map(k => E.BUILDINGS[k].name + (E.countOf(t, k) > 1 ? ' ×' + E.countOf(t, k) : '')).join(', ') : '';
     if (t.owner === G.me) return `${ter}${bld} · ${t.troops} soldats · +${inc} or`;
     const def = E.defenseOf(st, m, i);
     const need = Math.ceil(t.troops * def / 0.85) + 1;
@@ -1919,7 +1982,8 @@ button.link:hover { background: none; text-decoration: underline; }
     const info = own && G.hover >= 0 && G.hover !== sel ? G.hover : sel;
     if (info >= 0) {
       $('pName').textContent = (info !== sel ? '→ ' : '') + m.terr[info].name;
-      $('pInfo').textContent = territoryInfo(info) + (info === sel && own ? ' · touche une cible' : '');
+      const hint = window.matchMedia('(hover: hover)').matches ? ' · gauche : attaquer, droit : renforcer' : ' · touche une cible';
+      $('pInfo').textContent = territoryInfo(info) + (info === sel && own ? hint : '');
     } else {
       $('pName').textContent = 'Aucune sélection';
       $('pInfo').textContent = 'Clique sur un de tes territoires';
@@ -1929,15 +1993,15 @@ button.link:hover { background: none; text-decoration: underline; }
     document.querySelectorAll('[data-buy]').forEach(b => {
       b.disabled = !canBuy || (b.dataset.buy !== 'max' && me.gold < +b.dataset.buy * E.CFG.SOLDIER_COST);
     });
-    const built = own ? st.territories[sel].buildings : [];
-    const canBuild = own && built.length < Object.keys(E.BUILDINGS).length;
+    const room = (k) => own ? E.maxBuildings(st, sel, k) - E.countOf(st.territories[sel], k) : 0;
+    const canBuild = own && Object.keys(E.BUILDINGS).some(k => room(k) > 0);
     $('btnBuild').disabled = !canBuild;
     if (!canBuild && G.buildOpen) setBuildOpen(false);
     document.querySelectorAll('[data-build]').forEach(b => {
-      const k = b.dataset.build, has = built.includes(k);
-      const cost = E.buildCost(st, G.me, k);
-      b.disabled = !canBuild || has || me.gold < cost;
-      b.querySelector('i').textContent = has ? 'Déjà construit' : cost + ' or';
+      const k = b.dataset.build, cost = E.buildCost(st, G.me, k);
+      const max = own ? E.maxBuildings(st, sel, k) : 1, n = own ? E.countOf(st.territories[sel], k) : 0;
+      b.disabled = !canBuild || room(k) <= 0 || me.gold < cost;
+      b.querySelector('i').textContent = room(k) <= 0 ? (max > 1 ? `Maximum (${n}/${max})` : 'Déjà construit') : cost + ' or' + (max > 1 ? ` · ${n}/${max}` : '');
     });
 
     // Fin de partie / élimination
@@ -2055,7 +2119,7 @@ button.link:hover { background: none; text-decoration: underline; }
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
-    if (G.mode === 'solo' && G.state && !G.paused) E.step(G.state, G.map, dt);
+    if (G.mode === 'solo' && G.state && !G.paused && !G.choosing) E.step(G.state, G.map, dt);
     // filet de sécurité : si la taille affichée a changé (rotation), on redimensionne
     if (G.map && (Math.round(canvas.clientWidth * (window.devicePixelRatio || 1)) !== canvas.width || Math.round(canvas.clientHeight * (window.devicePixelRatio || 1)) !== canvas.height)) resize();
     draw();

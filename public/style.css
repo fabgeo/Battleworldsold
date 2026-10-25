@@ -158,3 +158,11 @@ button.link:hover { background: none; text-decoration: underline; }
   #game:not(.immersive) #bottombar button { height: 68px; min-width: 82px; padding: 0 18px; font-size: 21px; border-radius: 10px; }
   #game:not(.immersive) #buildMenu { bottom: 112px; left: 50%; right: auto; transform: translateX(-50%); }
 }
+
+/* Choix du territoire de départ */
+#chooseBanner { position: absolute; top: 62px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: #1d2228f0; border: 1px solid #2f7de1; border-radius: 12px; padding: 10px 16px; text-align: center; max-width: calc(100% - 24px); }
+#chooseBanner b { font-size: 17px; }
+#chooseBanner small { color: #9aa5b1; font-size: 13px; }
+#chooseBanner button { margin-top: 6px; padding: 6px 14px; font-size: 14px; }
+#game.immersive #chooseBanner { top: max(56px, env(safe-area-inset-top, 0px)); }

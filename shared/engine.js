@@ -25,21 +25,30 @@
   const TERRAIN = {
     plain: { name: 'Plaine', def: 1, speed: 1, income: 0 },
     forest: { name: 'Forêt', def: 1.25, speed: 0.7, income: 0 },
-    mountain: { name: 'Montagne', def: 1.6, speed: 0.5, income: 0 },
+    mountain: { name: 'Montagne', def: 1.6, speed: 0.5, income: 1 }, // mines de montagne : un peu plus d'or
     city: { name: 'Ville', def: 1.1, speed: 1, income: 2 },
   };
 
   const BUILDINGS = {
-    fort: { name: 'Fort', cost: 35, desc: 'Défense ×1,5', letter: 'F' },
+    fort: { name: 'Fort', cost: 20, desc: '+50 % de défense', letter: 'F' },
     mine: { name: 'Mine', cost: 25, desc: '+2 or par versement', letter: 'M' },
-    barracks: { name: 'Caserne', cost: 45, desc: '+1 soldat / 3 s', letter: 'C' },
+    barracks: { name: 'Caserne', cost: 40, desc: '+1 soldat / 3 s', letter: 'C' },
   };
-  const BUILD_STEP = 0.35; // chaque bâtiment déjà construit par le joueur rend le suivant 35 % plus cher
+  const BUILD_STEP = 0.2; // chaque bâtiment d'un type acheté rend le suivant du même type 20 % plus cher
 
-  // Prix d'un bâtiment pour un joueur : bas pour les premiers, puis de plus en plus cher
+  // Prix d'un bâtiment pour un joueur : +20 % par bâtiment de ce type déjà acheté (les autres types ne bougent pas)
   function buildCost(state, pi, kind) {
-    const built = state.players[pi] ? state.players[pi].stats.built : 0;
-    return Math.round(BUILDINGS[kind].cost * (1 + BUILD_STEP * built));
+    const p = state.players[pi];
+    const n = p && p.stats.builtKind ? p.stats.builtKind[kind] || 0 : 0;
+    return Math.round(BUILDINGS[kind].cost * Math.pow(1 + BUILD_STEP, n));
+  }
+
+  // Nombre de bâtiments d'un type sur un territoire, et maximum autorisé :
+  // 1 de chaque type, sauf dans une capitale (★) : 3 de chaque, mais 2 forts au plus
+  const countOf = (t, kind) => t.buildings.reduce((n, k) => n + (k === kind), 0);
+  function maxBuildings(state, ti, kind) {
+    const isCap = (state.capitals || []).includes(ti);
+    return isCap ? (kind === 'fort' ? 2 : 3) : 1;
   }
 
   const SIZES = { small: 25, medium: 40, large: 60 }; // territoires de la carte aléatoire
@@ -314,7 +323,8 @@
 
   // ---------- Partie ----------
   // players: [{ id, name, bot: false | 'easy'|'normal'|'hard' }]
-  function createGame(map, players, seed, opts) {
+  // start : territoire de départ choisi par le joueur 0 (facultatif)
+  function createGame(map, players, seed, opts, start) {
     opts = resolveOpts(opts, players.length);
     const state = {
       time: 0, rng: seed | 0, incomeAcc: 0, sec: 0, nextArmy: 1, winner: null, opts,
@@ -329,7 +339,10 @@
     const dists = [];
     for (let i = 0; i < players.length; i++) {
       let pick;
-      if (i === 0) pick = Math.floor(srand(state) * map.terr.length);
+      if (i === 0) {
+        pick = Math.floor(srand(state) * map.terr.length);
+        if (start >= 0 && start < map.terr.length) pick = start;
+      }
       else {
         let best = -1, bs = -1;
         for (let t = 0; t < map.terr.length; t++) {
@@ -348,7 +361,7 @@
       state.players.push({
         id: p.id, name: p.name, bot: p.bot || false, color: COLORS[i % COLORS.length],
         gold: opts.startGold, alive: true, capital: caps[i], nextThink: 1 + srand(state),
-        stats: { bought: 0, captures: 0, lost: 0, peakTerr: 1, capitals: 0, built: 0 },
+        stats: { bought: 0, captures: 0, lost: 0, peakTerr: 1, capitals: 0, built: 0, builtKind: {} },
       });
       state.territories[caps[i]].owner = i;
       state.territories[caps[i]].troops = CFG.START_TROOPS;
@@ -369,7 +382,7 @@
     state.territories.forEach((t, i) => {
       if (t.owner !== pi) return;
       inc += map.terr[i].income + TERRAIN[map.terr[i].terrain].income;
-      if (t.buildings.includes('mine')) inc += 2;
+      inc += 2 * countOf(t, 'mine');
     });
     if (state.players[pi].capital != null && state.territories[state.players[pi].capital].owner === pi) inc += CFG.CAPITAL_BONUS;
     return inc;
@@ -377,7 +390,7 @@
 
   // Multiplicateur de défense d'un territoire (terrain + fort)
   function defenseOf(state, map, i) {
-    return CFG.DEF_BONUS * TERRAIN[map.terr[i].terrain].def * (state.territories[i].buildings.includes('fort') ? 1.5 : 1);
+    return CFG.DEF_BONUS * TERRAIN[map.terr[i].terrain].def * (1 + 0.5 * countOf(state.territories[i], 'fort'));
   }
 
   function crossingPoint(map, a, b) {
@@ -452,13 +465,13 @@
     }
     if (act.type === 'build') {
       const t = state.territories[act.t], b = BUILDINGS[act.kind];
-      // plusieurs bâtiments par territoire, mais un seul de chaque type
-      if (!state.opts.buildings || !t || !b || t.owner !== pi || t.buildings.includes(act.kind)) return false;
+      if (!state.opts.buildings || !t || !b || t.owner !== pi || countOf(t, act.kind) >= maxBuildings(state, act.t, act.kind)) return false;
       const cost = buildCost(state, pi, act.kind);
       if (p.gold < cost) return false;
       p.gold -= cost;
       t.buildings.push(act.kind);
       p.stats.built++;
+      p.stats.builtKind[act.kind] = (p.stats.builtKind[act.kind] || 0) + 1;
       return true;
     }
     if (act.type === 'send') {
@@ -538,7 +551,7 @@
       state.incomeAcc -= 1;
       state.sec++;
       if (state.sec % CFG.INCOME_EVERY === 0) state.players.forEach((p, i) => { if (p.alive) p.gold += incomeOf(state, map, i); });
-      if (state.sec % CFG.BARRACKS_EVERY === 0) for (const t of state.territories) if (t.owner >= 0 && t.buildings.includes('barracks')) t.troops++;
+      if (state.sec % CFG.BARRACKS_EVERY === 0) for (const t of state.territories) if (t.owner >= 0) t.troops += countOf(t, 'barracks');
       if (state.sec % CFG.HISTORY_EVERY === 0) recordHistory(state);
     }
 
@@ -603,6 +616,14 @@
     T.forEach((t, i) => { if (t.owner === pi) mine.push(i); });
     if (!mine.length) return;
     if (!p.atk) p.atk = { lead: 0, other: 0 }; // compteur d'attaques contre le premier / contre les autres joueurs
+    // Comme un humain qui clique : un nombre limité d'actions (envoi, achat, construction) à chaque réflexion
+    let budget = { easy: 1, normal: 2, hard: 3 }[level] || 2;
+    const doAct = (act) => {
+      if (budget <= 0) return false;
+      const ok = applyAction(state, map, pi, act);
+      if (ok) budget--;
+      return ok;
+    };
 
     const incoming = {}; // troupes déjà envoyées par moi vers un territoire
     for (const a of state.armies) if (a.owner === pi) {
@@ -634,7 +655,7 @@
 
     const launch = (from, to, n) => {
       const owner = T[to].owner;
-      if (!applyAction(state, map, pi, { type: 'send', from, to, n })) return false;
+      if (!doAct({ type: 'send', from, to, n })) return false;
       if (owner === first) p.atk.lead++; else if (owner >= 0 && !nearlyOut(owner)) p.atk.other++;
       return true;
     };
@@ -720,13 +741,14 @@
     }
 
     // 3. Bâtiments : une mine à l'arrière quand on est riche, un fort sur la capitale menacée
-    if (state.opts.buildings && level !== 'easy' && p.gold > buildCost(state, pi, 'mine') + 80 && srand(state) < 0.35) {
+    if (state.opts.buildings && level !== 'easy' && budget > 0 && p.gold > buildCost(state, pi, 'mine') + 80 && srand(state) < 0.35) {
       const kind = srand(state) < 0.7 ? 'mine' : 'barracks';
-      const interior = mine.filter(i => !T[i].buildings.includes(kind) && !frontier.includes(i));
-      if (p.capital != null && T[p.capital].owner === pi && !T[p.capital].buildings.includes('fort') && frontier.includes(p.capital)) {
-        applyAction(state, map, pi, { type: 'build', t: p.capital, kind: 'fort' });
+      const canBuild = (i, k) => countOf(T[i], k) < maxBuildings(state, i, k);
+      const interior = mine.filter(i => canBuild(i, kind) && !frontier.includes(i));
+      if (p.capital != null && T[p.capital].owner === pi && canBuild(p.capital, 'fort') && frontier.includes(p.capital)) {
+        doAct({ type: 'build', t: p.capital, kind: 'fort' });
       } else if (interior.length) {
-        applyAction(state, map, pi, { type: 'build', t: interior[Math.floor(srand(state) * interior.length)], kind });
+        doAct({ type: 'build', t: interior[Math.floor(srand(state) * interior.length)], kind });
       }
     }
 
@@ -749,13 +771,13 @@
         if (v > bestVal) { bestVal = v; target = o; }
       }
       if (threatT >= 0 && level !== 'easy' && threat > (strike ? 12 : 3) && (!target || threat > 8)) {
-        applyAction(state, map, pi, { type: 'buy', t: threatT, n: Math.min(affordable, Math.ceil(threat / defenseOf(state, map, threatT)) + 2) });
+        doAct({ type: 'buy', t: threatT, n: Math.min(affordable, Math.ceil(threat / defenseOf(state, map, threatT)) + 2) });
       } else if (strike) {
-        applyAction(state, map, pi, { type: 'buy', t: strike.from, n: affordable });
+        doAct({ type: 'buy', t: strike.from, n: affordable });
       } else if (target) {
-        applyAction(state, map, pi, { type: 'buy', t: target.from, n: Math.min(affordable, target.need - (T[target.from].troops - 1)) });
+        doAct({ type: 'buy', t: target.from, n: Math.min(affordable, target.need - (T[target.from].troops - 1)) });
       } else if (frontier.length && affordable >= 3) {
-        applyAction(state, map, pi, { type: 'buy', t: frontier[Math.floor(srand(state) * frontier.length)], n: affordable });
+        doAct({ type: 'buy', t: frontier[Math.floor(srand(state) * frontier.length)], n: affordable });
       }
     }
 
@@ -772,16 +794,17 @@
       for (let k = 0; k < q.length; k++) {
         for (const n of map.terr[q[k]].neighbors) if (T[n].owner === pi && fd[n] === Infinity) { fd[n] = fd[q[k]] + 1; q.push(n); }
       }
-      for (const i of mine) {
+      for (const i of mine.slice().sort((x, y) => T[y].troops - T[x].troops)) {
+        if (budget <= 0) break;
         if (fd[i] === 0 || fd[i] === Infinity || T[i].troops < 3) continue;
         // un territoire du front garde ses troupes s'il est menacé par un voisin
         if (frontier.includes(i) && map.terr[i].neighbors.some(n => T[n].owner >= 0 && T[n].owner !== pi && T[n].troops > T[i].troops)) continue;
         let best = -1;
         for (const n of map.terr[i].neighbors) if (T[n].owner === pi && fd[n] < fd[i]) { best = n; break; }
-        if (best >= 0) applyAction(state, map, pi, { type: 'send', from: i, to: best, n: T[i].troops - 1 });
+        if (best >= 0) doAct({ type: 'send', from: i, to: best, n: T[i].troops - 1 });
       }
     }
   }
 
-  return { CFG, COLORS, TERRAIN, BUILDINGS, SIZES, buildCost, resolveOpts, generateMap, createGame, applyAction, step, incomeOf, defenseOf, travelTime, isSea, findPath, legPos, crossingPoint };
+  return { CFG, COLORS, TERRAIN, BUILDINGS, SIZES, buildCost, maxBuildings, countOf, resolveOpts, generateMap, createGame, applyAction, step, incomeOf, defenseOf, travelTime, isSea, findPath, legPos, crossingPoint };
 });

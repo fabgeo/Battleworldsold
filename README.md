@@ -33,12 +33,13 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
   |---|---|---|---|
   | Plaine | ×1 | normale | — |
   | Forêt | ×1,25 | ×0,7 | — |
-  | Montagne | ×1,6 | ×0,5 | — |
+  | Montagne | ×1,6 | ×0,5 | +1 |
   | Ville | ×1,1 | normale | +2 |
 
-- **Bâtiments** (test, désactivables) : Fort (défense ×1,5), Mine (+2 or par versement), Caserne (+1 soldat toutes les 3 s).
-  Prix de départ bas (Fort 35, Mine 25, Caserne 45), puis **+35 % pour chaque bâtiment déjà construit** par le joueur.
-  Un territoire peut avoir les trois (un de chaque type) ; ils restent en place si le territoire change de main.
+- **Bâtiments** (test, désactivables) : Fort 20 or (+50 % de défense chacun), Mine 25 or (+2 or par versement),
+  Caserne 40 or (+1 soldat toutes les 3 s). Chaque achat rend **le même type** 20 % plus cher (les autres types ne bougent pas).
+  Un territoire peut avoir 1 bâtiment de chaque type ; une **capitale** (★) jusqu'à 3 de chaque, mais 2 forts au plus.
+  Les bâtiments restent en place si le territoire change de main.
 - **Envoi de troupes** : depuis un de tes territoires vers n'importe quel territoire. Il reste toujours 1 soldat sur place.
   Le trajet passe de préférence par tes territoires ; un territoire neutre ou ennemi sur le chemin est attaqué :
   si l'armée gagne, elle y laisse 1 soldat et continue. **Fatigue** : -5 % de troupes par étape au-delà de la 2e.
@@ -49,6 +50,11 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
 - **Capitale prise** : le vaincu perd la moitié de son or, que le vainqueur récupère.
 - Un joueur sans territoire ni armée en marche est éliminé ; le dernier en vie gagne.
   À la fin : statistiques (territoires au fil du temps, captures, soldats achetés, plus grande bataille).
+
+## Début de partie
+
+En solo, la carte s'affiche neutre : tu **choisis ton territoire de départ** (ou « Au hasard ») et la partie commence
+aussitôt ; les bots se placent le plus loin possible de toi.
 
 ## Réglages de partie
 
@@ -62,7 +68,8 @@ Les bots cherchent à gagner, donc à **empêcher le premier de gagner** (le pre
 humain ou bot) :
 - dès que le premier a une vraie avance (au moins 2 territoires de plus que le deuxième), les bots normaux et difficiles
   lui réservent **au moins 70 % de leurs attaques contre des joueurs** (en pratique 90 % et plus) ;
-- les bots « normal » réfléchissent un peu moins vite qu'avant (toutes les ~2 s), « difficile » reste très réactif ;
+- comme un humain qui clique, ils ont un nombre limité d'actions à chaque réflexion (facile 1, normal 2, difficile 3 ;
+  une vingtaine d'actions par minute) : ils réfléchissent toutes les ~2,6 s (facile), ~2,1 s (normal), ~0,9 s (difficile) ;
 - ils peuvent l'attaquer même s'il n'est pas leur voisin : l'armée traverse la carte et prend ce qu'il y a sur le chemin ;
 - s'ils ne sont pas assez forts pour frapper, ils accumulent soldats et renforts sur leur base de frappe face à lui ;
 - quand tout le monde est au coude à coude, ils s'étendent et achèvent les joueurs presque éliminés, pour que la partie avance ;
@@ -70,7 +77,10 @@ humain ou bot) :
 
 ## Contrôles
 
-- Clic (ou tap) sur ton territoire : sélection. Puis clic sur n'importe quelle cible : envoi de troupes.
+- Clic (ou tap) sur ton territoire : sélection. Puis :
+  - **sur PC** : **clic gauche** sur une cible pour **attaquer** (sur un de tes territoires, il le sélectionne),
+    **clic droit** sur un de tes territoires pour y **envoyer des renforts** ;
+  - **au doigt** : toucher n'importe quelle cible y envoie les troupes (attaque ou renfort).
   À la souris, le trajet prévu s'affiche en pointillés et la barre du bas indique la défense de la cible
   et le nombre de soldats à peu près nécessaire pour la prendre.
 - Glisser-déposer **depuis le rond du nombre de soldats** (ou depuis le territoire déjà sélectionné) vers une cible : même chose.
@@ -90,7 +100,7 @@ humain ou bot) :
   | Acheter +1 / +5 / +10 / maximum | `A` `Z` `E` `B` |
   | Construire Fort / Mine / Caserne | `F` `M` `C` |
   | Sélectionner ma capitale | `H` |
-  | Désélectionner | `Échap` (ou clic droit) |
+  | Désélectionner | `Échap` (ou clic droit dans le vide) |
   | Pause (solo) | `P` |
 - Molette ou pincement à deux doigts : zoom de la carte. Glisser hors des ronds : déplacer la vue.
 

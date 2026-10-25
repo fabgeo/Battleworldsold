@@ -95,9 +95,23 @@
     const resolved = E.resolveOpts(opts, players.length);
     G.mode = 'solo';
     setupGame(seed, resolved);
-    G.state = E.createGame(G.map, players, seed ^ 0x5bd1e995, resolved);
     G.me = 0;
+    // Le joueur choisit son territoire de départ : on affiche la carte neutre, la partie commence au premier clic
+    G.state = E.createGame(G.map, players, seed ^ 0x5bd1e995, resolved);
+    G.state.territories.forEach(t => { t.owner = -1; });
+    G.state.players.forEach(pl => { pl.capital = null; });
+    G.state.capitals = [];
+    G.choosing = { players, seed: seed ^ 0x5bd1e995, opts: resolved };
+    $('chooseBanner').classList.remove('hidden');
   }
+  function chooseStart(t) {
+    const c = G.choosing;
+    G.choosing = null;
+    $('chooseBanner').classList.add('hidden');
+    G.state = E.createGame(G.map, c.players, c.seed, c.opts, t);
+    G.selected = -1;
+  }
+  $('btnRandomStart').onclick = () => { if (G.choosing) chooseStart(-1); };
 
   // ---------- Multi ----------
   async function post(route, body) {
@@ -164,13 +178,15 @@
   }
 
   function act(action) {
-    if (!G.state || G.state.winner != null || G.paused) return;
+    if (!G.state || G.state.winner != null || G.paused || G.choosing) return;
     if (G.mode === 'solo') E.applyAction(G.state, G.map, G.me, action);
     else post('action', withSession({ action })).catch(() => {});
   }
 
   // ---------- Préparation de la partie ----------
   function setupGame(seed, opts) {
+    G.choosing = null;
+    $('chooseBanner').classList.add('hidden');
     G.map = E.generateMap(seed, opts);
     G.selected = -1; G.hover = -1; G.baseKey = ''; G.overDismissed = false; G.overShown = false; G.finalShown = false;
     G.paused = false; setBuildOpen(false);
@@ -427,8 +443,9 @@
     if (!d || !G.state || e.type === 'pointercancel') return;
     const t = pick(e);
     if (!d.moved) {
-      if (d.button === 2) { G.selected = -1; return; }
-      if (d.button === 0) onClick(t);
+      if (G.choosing) { if (d.button === 0 && t >= 0) chooseStart(t); return; }
+      if (d.button === 2) { onRightClick(t); return; }
+      if (d.button === 0) onClick(t, e.pointerType === 'mouse');
     } else if (d.from >= 0 && t >= 0 && t !== d.from) {
       sendTroops(d.from, t);
     }
@@ -464,17 +481,25 @@
     G.view.cy = Math.max(0, Math.min(G.map.h, G.view.cy));
   }
 
-  // Clic : sélectionner un de mes territoires, puis cliquer n'importe quelle cible pour y envoyer des troupes
-  function onClick(t) {
+  // Clic : sélectionner un de mes territoires, puis cliquer une cible pour y envoyer des troupes.
+  // À la souris : clic gauche = attaquer (sur un de mes territoires, il le sélectionne), clic droit = renforcer
+  // un de mes territoires. Au doigt, toucher n'importe quelle cible envoie les troupes (attaque ou renfort).
+  function onClick(t, mouse) {
     if (t < 0) { G.selected = -1; return; }
     const st = G.state, sel = G.selected;
     if (t === sel) { G.selected = -1; return; }
-    if (sel >= 0 && st.territories[sel].owner === G.me) {
+    const ownSel = sel >= 0 && st.territories[sel].owner === G.me;
+    if (ownSel && !(mouse && st.territories[t].owner === G.me)) {
       sendTroops(sel, t);
       G.selected = -1;
       return;
     }
     G.selected = t;
+  }
+  function onRightClick(t) {
+    const st = G.state, sel = G.selected;
+    if (sel >= 0 && t >= 0 && t !== sel && st.territories[sel].owner === G.me && st.territories[t].owner === G.me) sendTroops(sel, t);
+    G.selected = -1;
   }
 
   function sendCount(from) {
@@ -718,15 +743,16 @@
       const caps = st.capitals || st.players.map(pl => pl.capital);
       if (caps.includes(i)) drawStar(x, y - r - R * 0.35, R * 0.62);
       ctx.font = font(R * 0.75, 700); ctx.fillStyle = 'rgba(30,25,15,0.85)';
-      const inc = T.income + E.TERRAIN[T.terrain].income + (t.buildings.includes('mine') ? 2 : 0);
+      const inc = T.income + E.TERRAIN[T.terrain].income + 2 * E.countOf(t, 'mine');
       ctx.fillText('+' + inc, x, y + r + R * 0.55);
-      // un petit badge par bâtiment, empilés à droite de l'étiquette
-      t.buildings.forEach((k, j) => {
-        const bs = R * 0.85, bx = x + r + bs * 0.55, by = y - r * 0.6 + j * (bs + 2 * DPR);
+      // un badge par type de bâtiment (avec le nombre s'il y en a plusieurs), empilés à droite de l'étiquette
+      Object.keys(E.BUILDINGS).filter(k => t.buildings.includes(k)).forEach((k, j) => {
+        const n = E.countOf(t, k), txt = E.BUILDINGS[k].letter + (n > 1 ? n : '');
+        const bh = R * 0.85, bw = bh * (txt.length > 1 ? 1.5 : 1), bx = x + r + bw * 0.55, by = y - r * 0.6 + j * (bh + 2 * DPR);
         ctx.fillStyle = '#1d2228'; ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 1.5 * DPR;
-        ctx.beginPath(); ctx.rect(bx - bs / 2, by - bs / 2, bs, bs); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.rect(bx - bw / 2, by - bh / 2, bw, bh); ctx.fill(); ctx.stroke();
         ctx.fillStyle = '#ffd84a'; ctx.font = font(R * 0.65, 700);
-        ctx.fillText(E.BUILDINGS[k].letter, bx, by + 1);
+        ctx.fillText(txt, bx, by + 1);
       });
     });
 
@@ -774,8 +800,9 @@
     const st = G.state, m = G.map, t = st.territories[i], T = m.terr[i];
     const owner = t.owner >= 0 ? st.players[t.owner].name : 'Neutre';
     const ter = E.TERRAIN[T.terrain].name;
-    const inc = T.income + E.TERRAIN[T.terrain].income + (t.buildings.includes('mine') ? 2 : 0);
-    const bld = t.buildings.length ? ' · ' + t.buildings.map(k => E.BUILDINGS[k].name).join(', ') : '';
+    const inc = T.income + E.TERRAIN[T.terrain].income + 2 * E.countOf(t, 'mine');
+    const bld = t.buildings.length ? ' · ' + Object.keys(E.BUILDINGS).filter(k => t.buildings.includes(k))
+      .map(k => E.BUILDINGS[k].name + (E.countOf(t, k) > 1 ? ' ×' + E.countOf(t, k) : '')).join(', ') : '';
     if (t.owner === G.me) return `${ter}${bld} · ${t.troops} soldats · +${inc} or`;
     const def = E.defenseOf(st, m, i);
     const need = Math.ceil(t.troops * def / 0.85) + 1;
@@ -808,7 +835,8 @@
     const info = own && G.hover >= 0 && G.hover !== sel ? G.hover : sel;
     if (info >= 0) {
       $('pName').textContent = (info !== sel ? '→ ' : '') + m.terr[info].name;
-      $('pInfo').textContent = territoryInfo(info) + (info === sel && own ? ' · touche une cible' : '');
+      const hint = window.matchMedia('(hover: hover)').matches ? ' · gauche : attaquer, droit : renforcer' : ' · touche une cible';
+      $('pInfo').textContent = territoryInfo(info) + (info === sel && own ? hint : '');
     } else {
       $('pName').textContent = 'Aucune sélection';
       $('pInfo').textContent = 'Clique sur un de tes territoires';
@@ -818,15 +846,15 @@
     document.querySelectorAll('[data-buy]').forEach(b => {
       b.disabled = !canBuy || (b.dataset.buy !== 'max' && me.gold < +b.dataset.buy * E.CFG.SOLDIER_COST);
     });
-    const built = own ? st.territories[sel].buildings : [];
-    const canBuild = own && built.length < Object.keys(E.BUILDINGS).length;
+    const room = (k) => own ? E.maxBuildings(st, sel, k) - E.countOf(st.territories[sel], k) : 0;
+    const canBuild = own && Object.keys(E.BUILDINGS).some(k => room(k) > 0);
     $('btnBuild').disabled = !canBuild;
     if (!canBuild && G.buildOpen) setBuildOpen(false);
     document.querySelectorAll('[data-build]').forEach(b => {
-      const k = b.dataset.build, has = built.includes(k);
-      const cost = E.buildCost(st, G.me, k);
-      b.disabled = !canBuild || has || me.gold < cost;
-      b.querySelector('i').textContent = has ? 'Déjà construit' : cost + ' or';
+      const k = b.dataset.build, cost = E.buildCost(st, G.me, k);
+      const max = own ? E.maxBuildings(st, sel, k) : 1, n = own ? E.countOf(st.territories[sel], k) : 0;
+      b.disabled = !canBuild || room(k) <= 0 || me.gold < cost;
+      b.querySelector('i').textContent = room(k) <= 0 ? (max > 1 ? `Maximum (${n}/${max})` : 'Déjà construit') : cost + ' or' + (max > 1 ? ` · ${n}/${max}` : '');
     });
 
     // Fin de partie / élimination
@@ -944,7 +972,7 @@
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
-    if (G.mode === 'solo' && G.state && !G.paused) E.step(G.state, G.map, dt);
+    if (G.mode === 'solo' && G.state && !G.paused && !G.choosing) E.step(G.state, G.map, dt);
     // filet de sécurité : si la taille affichée a changé (rotation), on redimensionne
     if (G.map && (Math.round(canvas.clientWidth * (window.devicePixelRatio || 1)) !== canvas.width || Math.round(canvas.clientHeight * (window.devicePixelRatio || 1)) !== canvas.height)) resize();
     draw();
