@@ -73,14 +73,15 @@ humain ou bot) :
 - Clic (ou tap) sur ton territoire : sélection. Puis clic sur n'importe quelle cible : envoi de troupes.
   À la souris, le trajet prévu s'affiche en pointillés et la barre du bas indique la défense de la cible
   et le nombre de soldats à peu près nécessaire pour la prendre.
-- Glisser-déposer d'un de tes territoires vers une cible : même chose.
+- Glisser-déposer **depuis le rond du nombre de soldats** (ou depuis le territoire déjà sélectionné) vers une cible : même chose.
+  Glisser ailleurs sur la carte la déplace, sans envoyer de troupes.
 - Au doigt, toucher près d'un rond de troupes suffit : le territoire le plus proche est choisi (pratique pour les petits territoires).
 - Après une action (envoi, achat, construction), la sélection s'enlève : le clic suivant sélectionne.
 - Barre du bas : achat (+1, +5, +10, Max), **Bâtir**, et part des troupes envoyées (25 à 100 %).
 - Barre du haut : Quitter, Recommencer, **Pause** (solo), **Plein écran**. En plein écran, la carte prend tout l'écran ;
   téléphone à l'horizontale : boutons en colonnes à gauche et à droite de la carte.
 - `B` : acheter le maximum. `1`–`4` : 25/50/75/100 %. `P` : pause. Échap ou clic droit : désélection.
-- Molette ou pincement à deux doigts : zoom de la carte. Glisser depuis un territoire qui n'est pas à toi : déplacer la vue.
+- Molette ou pincement à deux doigts : zoom de la carte. Glisser hors des ronds : déplacer la vue.
 
 ## Structure
 

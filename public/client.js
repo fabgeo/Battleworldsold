@@ -364,6 +364,12 @@
   }
   const pick = (e) => (e.pointerType === 'touch' ? terrAtTouch(e.offsetX, e.offsetY) : terrAt(e.offsetX, e.offsetY));
   G.debug = { toScreen: (x, y) => toScreen(x, y).map(v => v / DPR), terrAtTouch };
+  // Le point (px CSS) est-il sur le rond du nombre de soldats du territoire t (avec une marge pour le doigt) ?
+  function onLabel(t, sx, sy) {
+    const [x, y] = toScreen(G.map.terr[t].lx, G.map.terr[t].ly);
+    const r = Math.max(9, Math.min(20, viewScale() * 1.5 / DPR)) + 10;
+    return Math.hypot(x / DPR - sx, y / DPR - sy) <= r;
+  }
   function terrAt(sx, sy) {
     const [x, y] = toMap(sx, sy);
     const m = G.map;
@@ -388,7 +394,10 @@
     }
     const t = pick(e);
     const own = t >= 0 && G.state && G.state.territories[t].owner === G.me;
-    G.drag = { x: e.offsetX, y: e.offsetY, button: e.button, from: e.button === 0 && own ? t : -1, moved: false, cx: G.view.cx, cy: G.view.cy };
+    // Glisser pour envoyer des troupes seulement depuis le rond du nombre de soldats, ou depuis le territoire
+    // déjà sélectionné ; ailleurs, glisser déplace la carte
+    const fromLabel = own && (t === G.selected || onLabel(t, e.offsetX, e.offsetY));
+    G.drag = { x: e.offsetX, y: e.offsetY, button: e.button, from: e.button === 0 && fromLabel ? t : -1, moved: false, cx: G.view.cx, cy: G.view.cy };
   });
   canvas.addEventListener('pointermove', (e) => {
     if (!G.map) return;
