@@ -15,7 +15,7 @@
       <label>Ton nom <input id="name" maxlength="16" placeholder="Joueur"></label>
 
       <div class="row">
-        <label>Carte <select id="optMap"><option value="random">Aléatoire</option><option value="europe">Europe</option></select></label>
+        <label>Carte <select id="optMap"></select></label>
         <label>Taille <select id="optSize"><option value="auto">Auto</option><option value="small">Petite</option><option value="medium">Moyenne</option><option value="large">Grande</option></select></label>
       </div>
       <p class="sub" id="sizeHint"></p>
@@ -47,6 +47,7 @@
       </div>
       </div>
       <p id="menuError" class="error"></p>
+      <p class="credits">Cartes : Natural Earth ; France : IGN Admin Express (Licence Ouverte) ; Italie : ISTAT (CC BY 4.0).</p>
     </div>
   </section>
 
@@ -143,6 +144,7 @@
   </section>
 
   <script src="/shared/europe-map.js"></script>
+  <script src="/shared/maps-extra.js"></script>
   <script src="/shared/engine.js"></script>
   <script src="client.js"></script>
 </body>

@@ -166,3 +166,5 @@ button.link:hover { background: none; text-decoration: underline; }
 #chooseBanner small { color: #9aa5b1; font-size: 13px; }
 #chooseBanner button { margin-top: 6px; padding: 6px 14px; font-size: 14px; }
 #game.immersive #chooseBanner { top: max(56px, env(safe-area-inset-top, 0px)); }
+
+.credits { color: #6f7a86; font-size: 11px; margin: 12px 0 0; text-align: center; }

@@ -18,6 +18,7 @@ ${read('public/style.css')}</style>
 ${body}
 <script>
 ${read('shared/europe-map.js')}
+${read('shared/maps-extra.js')}
 ${read('shared/engine.js')}
 </script>
 <script>

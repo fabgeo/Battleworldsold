@@ -1,8 +1,8 @@
 // Moteur de jeu partagé : utilisé par le navigateur (solo) et le serveur (multi).
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./europe-map.js'));
-  else root.Engine = factory(root.EUROPE_MAP);
-})(typeof self !== 'undefined' ? self : this, function (EUROPE) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./europe-map.js'), require('./maps-extra.js'));
+  else root.Engine = factory(root.EUROPE_MAP, root.EXTRA_MAPS);
+})(typeof self !== 'undefined' ? self : this, function (EUROPE, EXTRA) {
   'use strict';
 
   const CFG = {
@@ -52,12 +52,16 @@
   }
 
   const SIZES = { small: 25, medium: 40, large: 60 }; // territoires de la carte aléatoire
+  const MAP_LIST = [
+    { id: 'random', name: 'Aléatoire' }, { id: 'europe', name: 'Europe' }, { id: 'france', name: 'France' },
+    { id: 'italy', name: 'Italie' }, { id: 'med', name: 'Méditerranée' }, { id: 'world', name: 'Monde' },
+  ];
   const COLORS = ['#e6194b', '#3c7dd9', '#3cb44b', '#f58231', '#911eb4', '#16b5b5', '#d6c400', '#f032e6'];
 
   // Réglages par défaut ("auto") complétés selon le nombre de joueurs
   function resolveOpts(opts, nPlayers) {
     opts = opts || {};
-    const map = opts.map === 'europe' ? 'europe' : 'random';
+    const map = MAP_LIST.some(m => m.id === opts.map) ? opts.map : 'random';
     // Taille : petite / moyenne / grande, ou auto selon le nombre de joueurs
     const sizeKey = SIZES[opts.size] ? opts.size : nPlayers <= 3 ? 'small' : nPlayers <= 5 ? 'medium' : 'large';
     const size = SIZES[sizeKey];
@@ -117,7 +121,8 @@
 
   function generateMap(seed, opts) {
     opts = opts || {};
-    if (opts.map === 'europe') return europeMap(seed, opts.sizeKey);
+    const data = mapData(opts.map, opts.sizeKey);
+    if (data) return dataMap(seed, data);
     const N = opts.size || 45;
     const H = Math.round(Math.sqrt(N * 355 / 1.6)), W = Math.round(H * 1.6);
     const r = mulberry(seed);
@@ -199,8 +204,17 @@
     return buildMap(seed, W, H, cells, defs, []);
   }
 
-  function europeMap(seed, sizeKey) {
-    const d = EUROPE[sizeKey] || EUROPE.large;
+  // Cartes réelles pré-calculées (grille en RLE, -1 = mer, -2 = terre hors jeu)
+  function mapData(map, sizeKey) {
+    const set = map === 'europe' ? EUROPE : EXTRA && EXTRA[map];
+    return set ? set[sizeKey] || set.large : null;
+  }
+  // Nombre de territoires d'une carte pour une taille (pour l'affichage des réglages)
+  function territoryCount(map, sizeKey) {
+    const d = mapData(map, sizeKey);
+    return d ? d.regions.length : SIZES[sizeKey];
+  }
+  function dataMap(seed, d) {
     const cells = new Int16Array(d.w * d.h);
     let p = 0;
     for (let i = 0; i < d.rle.length; i += 2) { cells.fill(d.rle[i], p, p + d.rle[i + 1]); p += d.rle[i + 1]; }
@@ -806,5 +820,5 @@
     }
   }
 
-  return { CFG, COLORS, TERRAIN, BUILDINGS, SIZES, buildCost, maxBuildings, countOf, resolveOpts, generateMap, createGame, applyAction, step, incomeOf, defenseOf, travelTime, isSea, findPath, legPos, crossingPoint };
+  return { CFG, COLORS, TERRAIN, BUILDINGS, SIZES, MAP_LIST, territoryCount, buildCost, maxBuildings, countOf, resolveOpts, generateMap, createGame, applyAction, step, incomeOf, defenseOf, travelTime, isSea, findPath, legPos, crossingPoint };
 });

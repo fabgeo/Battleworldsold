@@ -56,12 +56,12 @@
     return { map: o.map, size: o.size, speed: +o.speed, startGold: o.startGold, buildings: o.buildings === 'on' };
   }
   // Nombre de territoires selon la carte et la taille
-  function territoryCount(map, sizeKey) {
-    if (map === 'europe') return { small: 46, medium: 64, large: 79 }[sizeKey];
-    return E.SIZES[sizeKey];
-  }
+  const territoryCount = (map, sizeKey) => E.territoryCount(map, sizeKey);
+  // Liste des cartes dans le menu (générée depuis le moteur)
+  $('optMap').innerHTML = E.MAP_LIST.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
   function describeOpts(o) {
-    const parts = [o.map === 'europe' ? 'Europe' : 'Carte aléatoire'];
+    const found = E.MAP_LIST.find(m => m.id === o.map);
+    const parts = [!found || found.id === 'random' ? 'Carte aléatoire' : found.name];
     parts.push(o.size && o.size !== 'auto' ? { small: 'petite', medium: 'moyenne', large: 'grande' }[o.size] : 'taille auto');
     if (o.speed != null && +o.speed !== 1) parts.push(+o.speed < 1 ? 'lente' : 'rapide');
     if (o.startGold != null && o.startGold !== 'auto') parts.push(o.startGold + ' or au départ');
@@ -263,7 +263,7 @@
 
   // Image de fond redessinée seulement quand les propriétaires changent
   const S = 8;
-  const SEA = [44, 74, 107];
+  const SEA = [44, 74, 107], FOREIGN = [92, 96, 100]; // mer, terre hors jeu (pays voisins)
   function rebuildBase() {
     const m = G.map, st = G.state;
     const key = st.territories.map(t => t.owner).join(',');
@@ -275,7 +275,7 @@
     const img = sctx.createImageData(m.w, m.h);
     const cols = m.terr.map((_, i) => terrColor(i, st.territories[i].owner));
     for (let i = 0; i < m.w * m.h; i++) {
-      const c = m.cells[i] >= 0 ? cols[m.cells[i]] : SEA;
+      const c = m.cells[i] >= 0 ? cols[m.cells[i]] : m.cells[i] === -2 ? FOREIGN : SEA;
       img.data[i * 4] = c[0]; img.data[i * 4 + 1] = c[1]; img.data[i * 4 + 2] = c[2]; img.data[i * 4 + 3] = 255;
     }
     sctx.putImageData(img, 0, 0);

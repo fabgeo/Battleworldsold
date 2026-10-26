@@ -23,8 +23,18 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
 
 ## Règles (v0.3)
 
-- **Cartes** : aléatoire (25 / 40 / 60 territoires d'un seul tenant) ou **Europe** tirée des vraies frontières
-  (46 / 64 / 79 régions : la petite taille garde surtout des pays entiers), îles reliées par des passages maritimes en pointillés.
+- **Cartes** (petite / moyenne / grande) :
+
+  | Carte | Territoires | Découpage |
+  |---|---|---|
+  | Aléatoire | 25 / 40 / 60 | d'un seul tenant, sans mer |
+  | Europe | 46 / 64 / 79 | pays entiers, puis régions |
+  | France | 13 / 42 / 92 | régions, groupes de départements, départements |
+  | Italie | 20 / 47 / 106 | régions, groupes de provinces, provinces |
+  | Méditerranée | 31 / 53 / 74 | pays du pourtour, les grands découpés (Kabylie, Cyrénaïque, Anatolie…) |
+  | Monde | 47 / 79 / 116 | pays (petits voisins regroupés, grands découpés : Sibérie, Alaska, Québec…) |
+
+  Les îles sont reliées par des passages maritimes en pointillés ; les pays voisins hors jeu sont en gris.
 - **Revenu** : versé toutes les **4 s** (rythme posé, pour laisser le temps de réfléchir à la stratégie) : 5 or de base pour chaque joueur, + 1 à 3 par territoire, + 3 pour la capitale (★).
 - Un soldat coûte **5 or** et apparaît sur le territoire choisi.
 - **Terrains** :
@@ -104,9 +114,23 @@ humain ou bot) :
   | Pause (solo) | `P` |
 - Molette ou pincement à deux doigts : zoom de la carte. Glisser hors des ronds : déplacer la vue.
 
+## Cartes : sources et régénération
+
+- Europe, Méditerranée, Monde : [Natural Earth](https://www.naturalearthdata.com/) via `world-atlas` (domaine public).
+- France : IGN Admin Express via [france-geojson](https://github.com/gregoiredavid/france-geojson) (Licence Ouverte Etalab).
+- Italie : ISTAT via [openpolis/geojson-italy](https://github.com/openpolis/geojson-italy) (CC BY 4.0).
+- Noms des pays en français : `i18n-iso-countries`.
+
+Les cartes sont pré-calculées dans `shared/europe-map.js` et `shared/maps-extra.js`. Pour les régénérer :
+`node tools/build-europe.js` (voir l'en-tête du fichier) et `node tools/build-maps.js <dossier>`, où le dossier contient
+`countries-50m.json`, `countries-110m.json` (world-atlas), `topojson-client.js`, `codes.json` et `fr.json` (i18n-iso-countries),
+`france-regions.geojson`, `france-departements.geojson` (france-geojson, versions simplifiées),
+`italie-regions.geojson`, `italie-provinces.geojson` (geojson-italy : `limits_IT_regions`, `limits_IT_provinces`).
+
 ## Structure
 
 - `shared/engine.js` : moteur (carte, combat, revenus, IA), commun au navigateur et au serveur.
+- `shared/maps-extra.js` : cartes France, Italie, Méditerranée et Monde, générées par `tools/build-maps.js`.
 - `shared/europe-map.js` : carte d'Europe pré-calculée, générée par `tools/build-europe.js`
   (`npm i --no-save world-atlas@2 topojson-client@3 && node tools/build-europe.js`).
 - `server.js` : serveur HTTP + salons multijoueur (SSE + POST), autoritaire à 10 ticks/s.
