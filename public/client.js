@@ -347,6 +347,7 @@
 
   // Fond autour de la carte : bleu nuit, méridiens discrets, vignette (mis en cache à chaque redimensionnement)
   function drawBackdrop() {
+    if (!canvas.width || !canvas.height) return; // zone de jeu cachée (menu) : rien à dessiner
     if (!G.backdrop || G.backdrop.width !== canvas.width || G.backdrop.height !== canvas.height) {
       const c = G.backdrop = document.createElement('canvas');
       c.width = canvas.width; c.height = canvas.height;
@@ -377,6 +378,7 @@
     else inset = { t: 40, b: window.innerHeight - bb.top, l: 0, r: 0 };
   }
   function resize() {
+    if (!canvas.clientWidth || !canvas.clientHeight) return; // écran de jeu caché (menu) : on garde la taille actuelle
     DPR = window.devicePixelRatio || 1;
     canvas.width = Math.round(canvas.clientWidth * DPR);
     canvas.height = Math.round(canvas.clientHeight * DPR);
@@ -1178,13 +1180,17 @@
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
+    // une erreur (de dessin, d'un navigateur particulier…) ne doit jamais arrêter la boucle du jeu
+    try { frameBody(dt); } catch (err) { if (!G.lastErr || now - G.lastErr > 5000) { G.lastErr = now; console.error(err); } }
+    requestAnimationFrame(frame);
+  }
+  function frameBody(dt) {
     if (G.mode === 'solo' && G.state && !G.paused && !G.choosing) E.step(G.state, G.map, dt);
     // filet de sécurité : si la taille affichée a changé (rotation), on redimensionne
     if (G.map && (Math.round(canvas.clientWidth * (window.devicePixelRatio || 1)) !== canvas.width || Math.round(canvas.clientHeight * (window.devicePixelRatio || 1)) !== canvas.height)) resize();
     draw();
     uiAcc += dt;
     if (uiAcc > 0.1) { uiAcc = 0; updateUI(); }
-    requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 })();
