@@ -1032,6 +1032,41 @@ button.link:hover { background: none; text-decoration: underline; }
     };
 
     const frontier = mine.filter(i => map.terr[i].neighbors.some(n => T[n].owner !== pi));
+
+    // ---- Défense ----
+    // Armées ennemies en route : la première de mes cases sur leur chemin est menacée
+    const hostile = new Array(T.length).fill(0);
+    for (const a of state.armies) {
+      if (a.owner === pi) continue;
+      for (const v of [a.to].concat(a.path || [])) if (T[v].owner === pi) { hostile[v] += a.n; break; }
+    }
+    // Soldats à garder sur place quand une attaque arrive (le terrain et les forts comptent dans la défense)
+    const keepOf = (i) => {
+      if (level === 'easy' || !hostile[i]) return 0;
+      return Math.ceil(hostile[i] * 1.15 / defenseOf(state, map, i));
+    };
+    const spare = (i) => T[i].troops - 1 - keepOf(i); // soldats disponibles pour attaquer ou renforcer ailleurs
+    if (level !== 'easy') {
+      // valeur d'un territoire : capitale, ville, montagne, revenu
+      const value = (i) => (p.capital === i ? 20 : 0) + map.terr[i].income * 2 + TERRAIN[map.terr[i].terrain].income * 3 + (map.terr[i].terrain === 'mountain' ? 3 : 0);
+      const attacked = mine.filter(i => hostile[i] > 0)
+        .map(i => ({ i, deficit: Math.ceil(hostile[i] * 1.15 / defenseOf(state, map, i)) + 1 - T[i].troops }))
+        .filter(x => x.deficit > 0)
+        .sort((x, y) => value(y.i) - value(x.i));
+      for (const { i, deficit } of attacked) {
+        let need = deficit;
+        // 1. acheter des défenseurs sur place
+        const can = Math.min(need, Math.floor(p.gold / CFG.SOLDIER_COST));
+        if (can > 0 && doAct({ type: 'buy', t: i, n: can })) need -= can;
+        // 2. renforts depuis mes territoires voisins qui ont des soldats en trop
+        for (const n of map.terr[i].neighbors) {
+          if (need <= 0) break;
+          if (T[n].owner !== pi || hostile[n] > 0) continue;
+          const give = Math.min(need, spare(n));
+          if (give > 0 && doAct({ type: 'send', from: n, to: i, n: give })) need -= give;
+        }
+      }
+    }
     const used = new Set();
     let attacks = 0;
     const maxAttacks = level === 'hard' ? 3 : level === 'easy' ? 1 : 2;
@@ -1063,7 +1098,7 @@ button.link:hover { background: none; text-decoration: underline; }
       for (const c of cands) {
         if (attacks >= maxAttacks) break;
         if (used.has(c.to)) continue;
-        if (T[c.from].troops - 1 >= c.need && launch(c.from, c.to, c.need)) { used.add(c.to); attacks++; }
+        if (spare(c.from) >= c.need && launch(c.from, c.to, c.need)) { used.add(c.to); attacks++; }
       }
       if (!attacks && cands.length) strike = cands.reduce((best, c) => (c.need - T[c.from].troops < best.need - T[best.from].troops ? c : best));
     }
@@ -1096,7 +1131,7 @@ button.link:hover { background: none; text-decoration: underline; }
       if (used.has(o.to) || o.need <= 0) continue;
       const owner = T[o.to].owner;
       if (focus && owner >= 0 && owner !== first && !nearlyOut(owner) && leadShare(0, 1) < QUOTA) continue;
-      if (T[o.from].troops - 1 >= o.need && launch(o.from, o.to, o.need)) { used.add(o.to); attacks++; }
+      if (spare(o.from) >= o.need && launch(o.from, o.to, o.need)) { used.add(o.to); attacks++; }
     }
 
     // 3. Bâtiments : une mine à l'arrière quand on est riche, un fort sur la capitale menacée
@@ -1160,7 +1195,7 @@ button.link:hover { background: none; text-decoration: underline; }
         if (frontier.includes(i) && map.terr[i].neighbors.some(n => T[n].owner >= 0 && T[n].owner !== pi && T[n].troops > T[i].troops)) continue;
         let best = -1;
         for (const n of map.terr[i].neighbors) if (T[n].owner === pi && fd[n] < fd[i]) { best = n; break; }
-        if (best >= 0) doAct({ type: 'send', from: i, to: best, n: T[i].troops - 1 });
+        if (best >= 0 && spare(i) >= 2) doAct({ type: 'send', from: i, to: best, n: spare(i) });
       }
     }
   }

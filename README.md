@@ -83,6 +83,9 @@ humain ou bot) :
 - ils peuvent l'attaquer même s'il n'est pas leur voisin : l'armée traverse la carte et prend ce qu'il y a sur le chemin ;
 - s'ils ne sont pas assez forts pour frapper, ils accumulent soldats et renforts sur leur base de frappe face à lui ;
 - quand tout le monde est au coude à coude, ils s'étendent et achèvent les joueurs presque éliminés, pour que la partie avance ;
+- **défense** (normal et difficile) : ils repèrent les armées ennemies en route vers leurs territoires, n'en retirent plus
+  de soldats, achètent des défenseurs sur place (priorité à la capitale, aux villes et aux montagnes) et appellent
+  des renforts de leurs territoires voisins ;
 - un bot qui est lui-même premier cherche à achever ses adversaires. Les bots faciles restent opportunistes.
 
 ## Contrôles
