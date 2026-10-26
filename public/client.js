@@ -187,6 +187,8 @@
   // ---------- Préparation de la partie ----------
   function setupGame(seed, opts) {
     G.choosing = null;
+    G.autoPick = -1;
+    $('toasts').innerHTML = '';
     $('chooseBanner').classList.add('hidden');
     G.map = E.generateMap(seed, opts);
     G.selected = -1; G.hover = -1; G.baseKey = ''; G.overDismissed = false; G.overShown = false; G.finalShown = false;
@@ -486,6 +488,7 @@
   // À la souris : clic gauche = attaquer (sur un de mes territoires, il le sélectionne), clic droit = renforcer
   // un de mes territoires. Au doigt, toucher n'importe quelle cible envoie les troupes (attaque ou renfort).
   function onClick(t, mouse) {
+    if (G.autoPick >= 0) { pickAutoTarget(t); return; }
     if (t < 0) { G.selected = -1; return; }
     const st = G.state, sel = G.selected;
     if (t === sel) { G.selected = -1; return; }
@@ -497,7 +500,41 @@
     }
     G.selected = t;
   }
+  // ---------- Envois automatiques ----------
+  // Bouton « Auto » (ou touche R) sur un de mes territoires, puis toucher un autre de mes territoires :
+  // ses soldats y partiront tout seuls toutes les 2 s. Sur un territoire qui a déjà une route : l'arrête.
+  function toggleAuto(useHover) {
+    const t = actionTarget(useHover);
+    if (t < 0 || !G.state || G.state.territories[t].owner !== G.me) return;
+    if (G.state.territories[t].auto >= 0) { act({ type: 'auto', from: t, to: -1 }); toast('Envoi automatique arrêté', 'info'); G.selected = -1; return; }
+    G.autoPick = t;
+    G.selected = t;
+    toast('Touche le territoire qui recevra les renforts', 'info');
+  }
+  function pickAutoTarget(t) {
+    const from = G.autoPick;
+    G.autoPick = -1;
+    document.querySelectorAll('#toasts .toast.info').forEach(el => el.remove()); // la consigne n'est plus utile
+    G.selected = -1;
+    if (t < 0 || t === from) return;
+    if (G.state.territories[t].owner !== G.me) { toast('Choisis un de tes territoires', 'warn'); return; }
+    act({ type: 'auto', from, to: t });
+    toast(`Renforts automatiques : ${G.map.terr[from].name} → ${G.map.terr[t].name}`, 'good');
+  }
+  $('btnAuto').onclick = () => { if (G.autoPick >= 0) { G.autoPick = -1; G.selected = -1; } else toggleAuto(false); };
+  // petit message en haut de l'écran, disparaît tout seul
+  function toast(text, kind) {
+    const box = $('toasts');
+    const el = document.createElement('div');
+    el.className = 'toast ' + (kind || 'info');
+    el.textContent = text;
+    box.prepend(el);
+    while (box.children.length > 3) box.lastChild.remove();
+    setTimeout(() => el.remove(), 4000);
+  }
+
   function onRightClick(t) {
+    if (G.autoPick >= 0) { pickAutoTarget(t); return; }
     const st = G.state, sel = G.selected;
     if (sel >= 0 && t >= 0 && t !== sel && st.territories[sel].owner === G.me && st.territories[t].owner === G.me) sendTroops(sel, t);
     G.selected = -1;
@@ -572,9 +609,11 @@
     { id: 'buildFort', label: 'Construire un Fort', def: { key: 'f', code: '' }, run: () => build('fort', true) },
     { id: 'buildMine', label: 'Construire une Mine', def: { key: 'm', code: '' }, run: () => build('mine', true) },
     { id: 'buildBarracks', label: 'Construire une Caserne', def: { key: 'c', code: '' }, run: () => build('barracks', true) },
+    { group: 'Envois automatiques' },
+    { id: 'auto', label: 'Route auto (puis clic sur la cible)', def: { key: 'r', code: '' }, run: () => toggleAuto(true) },
     { group: 'Divers' },
     { id: 'capital', label: 'Sélectionner ma capitale', def: { key: 'h', code: '' }, run: selectCapital },
-    { id: 'deselect', label: 'Désélectionner', def: { key: 'Escape', code: 'Escape' }, run: () => { G.selected = -1; setBuildOpen(false); } },
+    { id: 'deselect', label: 'Désélectionner', def: { key: 'Escape', code: 'Escape' }, run: () => { G.selected = -1; G.autoPick = -1; setBuildOpen(false); } },
     { id: 'pause', label: 'Pause (solo)', def: { key: 'p', code: '' }, run: () => { if (G.mode === 'solo') setPaused(!G.paused); } },
   ];
   let keys = {};
@@ -701,6 +740,27 @@
 
     const R = Math.max(9 * DPR, Math.min(20 * DPR, s * 1.5));
     const font = (px, w) => `${w || 600} ${Math.round(px)}px system-ui, sans-serif`;
+    // Routes d'envoi automatique : flèche courbe en pointillés vers le territoire qui reçoit les renforts
+    st.territories.forEach((t, i) => {
+      if (!(t.auto >= 0) || t.owner < 0) return;
+      const [x1, y1] = toScreen(m.terr[i].lx, m.terr[i].ly), [x2, y2] = toScreen(m.terr[t.auto].lx, m.terr[t.auto].ly);
+      const mx = (x1 + x2) / 2 - (y2 - y1) * 0.18, my = (y1 + y2) / 2 + (x2 - x1) * 0.18;
+      ctx.lineCap = 'round';
+      for (const [w, col] of [[5 * DPR, 'rgba(10,12,16,0.6)'], [2.5 * DPR, st.players[t.owner].color]]) {
+        ctx.strokeStyle = col; ctx.lineWidth = w; ctx.setLineDash([9 * DPR, 7 * DPR]);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(mx, my, x2, y2); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      const ang = Math.atan2(y2 - my, x2 - mx), ah = R * 0.9, tx = x2 - Math.cos(ang) * R * 1.1, ty = y2 - Math.sin(ang) * R * 1.1;
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.cos(ang - 0.5) * ah, ty - Math.sin(ang - 0.5) * ah); ctx.lineTo(tx - Math.cos(ang + 0.5) * ah, ty - Math.sin(ang + 0.5) * ah); ctx.closePath();
+      ctx.fillStyle = st.players[t.owner].color; ctx.fill(); ctx.lineWidth = 1.5 * DPR; ctx.strokeStyle = 'rgba(10,12,16,0.8)'; ctx.stroke();
+    });
+    // territoire de départ d'une route en cours de création
+    if (G.autoPick >= 0) {
+      const [x, y] = toScreen(m.terr[G.autoPick].lx, m.terr[G.autoPick].ly);
+      ctx.beginPath(); ctx.arc(x, y, R * 1.7, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 2.5 * DPR; ctx.stroke();
+    }
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
     // Aperçu du trajet depuis la sélection vers la cible survolée (souris) ou glissée
@@ -860,6 +920,13 @@
       b.disabled = !canBuild || room(k) <= 0 || me.gold < cost;
       b.querySelector('i').textContent = room(k) <= 0 ? (max > 1 ? `Maximum (${n}/${max})` : 'Déjà construit') : cost + ' or' + (max > 1 ? ` · ${n}/${max}` : '');
     });
+
+    // Envoi automatique : bouton selon l'état
+    const autoBtn = $('btnAuto');
+    autoBtn.disabled = !own && G.autoPick < 0;
+    autoBtn.classList.toggle('active', G.autoPick >= 0);
+    autoBtn.textContent = G.autoPick >= 0 ? 'Annuler' : own && st.territories[sel].auto >= 0 ? 'Stop auto' : 'Auto';
+    if (G.autoPick >= 0) { $('pName').textContent = 'Route automatique'; $('pInfo').textContent = 'Touche le territoire qui recevra les renforts'; }
 
     // Fin de partie / élimination
     if (st.winner != null && !G.finalShown) showEnd(true);

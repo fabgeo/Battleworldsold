@@ -174,3 +174,13 @@ button.link:hover { background: none; text-decoration: underline; }
 #buildMenu [data-build="fort"] b::before { background: #b9c3cc; }
 #buildMenu [data-build="mine"] b::before { background: #ffd84a; }
 #buildMenu [data-build="barracks"] b::before { background: #ff8f7f; }
+
+/* Envoi automatique et petits messages */
+#btnAuto.active { background: #2f7de1; }
+#toasts { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; width: min(92%, 440px); }
+.toast { background: #1d2228f0; border: 1px solid #444d58; border-left: 4px solid #2f7de1; padding: 7px 12px; border-radius: 8px; font-size: 14px; text-align: center; }
+.toast.good { border-left-color: #4caf72; }
+.toast.warn { border-left-color: #e0a83a; }
+#game.immersive #toasts { top: max(52px, env(safe-area-inset-top, 0px)); }
+/* téléphone étroit en portrait : on masque +1 pour garder une seule ligne avec le bouton Auto */
+@media (max-width: 430px) { #bottombar [data-buy="1"] { display: none; } #bottombar { gap: 6px; padding-left: max(6px, env(safe-area-inset-left, 0px)); padding-right: max(6px, env(safe-area-inset-right, 0px)); } #bottombar .group { gap: 2px; } }

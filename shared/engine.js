@@ -669,6 +669,8 @@
     const T = state.territories;
     const level = p.bot;
     const margin = level === 'hard' ? 1.25 : level === 'easy' ? 1.6 : 1.4;
+    // face à une grosse pile, la marge de sécurité baisse : sinon deux voisins s'observent sans fin et accumulent des centaines de soldats
+    const marginOf = (def) => (def >= 30 ? Math.min(margin, 1.12) : margin);
     const mine = [];
     T.forEach((t, i) => { if (t.owner === pi) mine.push(i); });
     if (!mine.length) return;
@@ -723,7 +725,7 @@
       let need = 2;
       path.forEach((v, k) => {
         if (T[v].owner === pi) return;
-        need += Math.ceil(T[v].troops * defenseOf(state, map, v) * margin) + (k < path.length - 1 ? 1 : 0);
+        need += Math.ceil(T[v].troops * defenseOf(state, map, v) * marginOf(T[v].troops)) + (k < path.length - 1 ? 1 : 0);
       });
       need = Math.ceil(need * Math.pow(1 + CFG.FATIGUE, Math.max(0, path.length - CFG.FREE_LEGS)));
       return { path, need: need - (incoming[to] || 0) };
@@ -782,7 +784,7 @@
     const used = new Set();
     let attacks = 0;
     // on garde toujours une action pour acheter quand il y a de l'or en caisse (sinon l'or s'accumule sans servir)
-    const maxAttacks = Math.max(1, Math.min(level === 'hard' ? 3 : level === 'easy' ? 1 : 2, budget - (p.gold >= 30 ? 1 : 0)));
+    const maxAttacks = Math.max(0, Math.min(level === 'hard' ? 3 : level === 'easy' ? 1 : 2, budget - (p.gold >= 30 ? 1 : 0)));
     let strike = null; // frappe sur le premier en préparation (on accumule des troupes à `from`)
 
     // 1. Frappes sur le premier (bots normaux et difficiles qui ne sont pas premiers)
@@ -816,6 +818,7 @@
       if (!attacks && cands.length) strike = cands.reduce((best, c) => (c.need - T[c.from].troops < best.need - T[best.from].troops ? c : best));
     }
 
+    const bigMin = Math.max(25, 10 + state.time / 30); // au-delà, une pile de soldats « dort » trop
     // 2. Autres attaques sur les voisins (neutres, autres joueurs) — en respectant le quota sur le premier
     const power = state.players.map((q, i) => counts[i] + troops[i] / 15 + (q.alive ? q.gold / 60 : 0));
     const options = [];
@@ -824,7 +827,7 @@
       for (const n of map.terr[i].neighbors) {
         if (T[n].owner === pi) continue;
         const def = T[n].troops, o = T[n].owner;
-        const need = Math.ceil(def * defenseOf(state, map, n) * margin) + 2 - (incoming[n] || 0);
+        const need = Math.ceil(def * defenseOf(state, map, n) * marginOf(def)) + 2 - (incoming[n] || 0);
         let score = map.terr[n].income * 3 + TERRAIN[map.terr[n].terrain].income * 2 - def * 0.25;
         if (level === 'easy') score += o === -1 ? 1 : 0;
         else if (o === -1) score += neutralsLeft > T.length * 0.3 ? 2 : 0;
@@ -844,7 +847,35 @@
       if (used.has(o.to) || o.need <= 0) continue;
       const owner = T[o.to].owner;
       if (focus && owner >= 0 && owner !== first && !nearlyOut(owner) && leadShare(0, 1) < QUOTA) continue;
-      if (spare(o.from) >= o.need && launch(o.from, o.to, o.need)) { used.add(o.to); attacks++; }
+      // une grosse pile avance avec l'attaque au lieu de n'envoyer que le minimum
+      const sp = spare(o.from), n = sp >= bigMin ? Math.max(o.need, Math.floor(sp * 0.6)) : o.need;
+      if (sp >= o.need && launch(o.from, o.to, n)) { used.add(o.to); attacks++; }
+    }
+
+    // 2b. Grosses piles qui dorment : si un territoire a beaucoup de soldats sans cible voisine à sa portée,
+    //     il frappe plus loin (contourne la pile d'en face) ; à défaut il attaque la pile voisine dès qu'il la dépasse
+    const piles = mine.filter(i => spare(i) >= bigMin && !(strike && strike.from === i)).sort((x, y) => T[y].troops - T[x].troops);
+    for (const src of piles.slice(0, 2)) {
+      if (budget <= 0) break;
+      const d = new Array(T.length).fill(Infinity), q = [src];
+      d[src] = 0;
+      for (let k = 0; k < q.length; k++) for (const n of map.terr[q[k]].neighbors) if (d[n] === Infinity && d[q[k]] < 5) { d[n] = d[q[k]] + 1; q.push(n); }
+      let best = null;
+      for (const tg of q) {
+        if (T[tg].owner === pi || used.has(tg)) continue;
+        const o = T[tg].owner;
+        if (focus && o >= 0 && o !== first && !nearlyOut(o) && leadShare(0, 1) < QUOTA) continue;
+        const c = costOf(src, tg);
+        if (!c || c.need <= 0 || c.need > spare(src)) continue;
+        let score = map.terr[tg].income * 3 + TERRAIN[map.terr[tg].terrain].income * 2 - c.need * 0.05 - d[tg] * 2;
+        if (o >= 0 && o === first && !iLead) score += 6;
+        if (o >= 0 && state.players[o].capital === tg) score += 6 + state.players[o].gold / 100;
+        if (!best || score > best.score) best = { tg, c, score };
+      }
+      if (!best) continue;
+      // on envoie de quoi prendre la cible avec de la marge, la pile ne reste pas plantée là
+      const n = Math.min(spare(src), Math.max(best.c.need, Math.ceil(spare(src) * 0.6)));
+      if (launch(src, best.tg, n)) used.add(best.tg);
     }
 
     // 3. Bâtiments : uniquement avec l'or en trop, pour s'améliorer
@@ -928,8 +959,14 @@
       // l'or restant (au-delà de l'épargne pour un bâtiment) ne dort pas : il part en soldats sur le front
       const left = Math.floor((p.gold - saving) / CFG.SOLDIER_COST);
       if (left >= 8 && frontier.length) {
-        const facing = frontier.filter(i => map.terr[i].neighbors.some(n => T[n].owner === first));
-        const spot = strike ? strike.from : (facing.length ? facing : frontier)[Math.floor(srand(state) * (facing.length || frontier.length))];
+        // sur la case du front la plus faible face à ses voisins (pas sur une pile déjà énorme)
+        let spot = strike ? strike.from : -1, worst = Infinity;
+        if (spot < 0) for (const i of frontier) {
+          let enemy = 1;
+          for (const n of map.terr[i].neighbors) if (T[n].owner !== pi) enemy = Math.max(enemy, T[n].troops);
+          const ratio = T[i].troops * defenseOf(state, map, i) / enemy;
+          if (ratio < worst) { worst = ratio; spot = i; }
+        }
         doAct({ type: 'buy', t: spot, n: left });
       }
     }
