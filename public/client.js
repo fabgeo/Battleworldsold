@@ -746,12 +746,13 @@
       const inc = T.income + E.TERRAIN[T.terrain].income + 2 * E.countOf(t, 'mine');
       ctx.fillText('+' + inc, x, y + r + R * 0.55);
       // un badge par type de bâtiment (avec le nombre s'il y en a plusieurs), empilés à droite de l'étiquette
+      // couleur par type : Fort gris pierre, Mine or, Caserne rouge (visible pour tous les joueurs)
       Object.keys(E.BUILDINGS).filter(k => t.buildings.includes(k)).forEach((k, j) => {
         const n = E.countOf(t, k), txt = E.BUILDINGS[k].letter + (n > 1 ? n : '');
-        const bh = R * 0.85, bw = bh * (txt.length > 1 ? 1.5 : 1), bx = x + r + bw * 0.55, by = y - r * 0.6 + j * (bh + 2 * DPR);
-        ctx.fillStyle = '#1d2228'; ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 1.5 * DPR;
-        ctx.beginPath(); ctx.rect(bx - bw / 2, by - bh / 2, bw, bh); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#ffd84a'; ctx.font = font(R * 0.65, 700);
+        const bh = R * 0.95, bw = bh * (txt.length > 1 ? 1.55 : 1.05), bx = x + r + bw * 0.55, by = y - r * 0.7 + j * (bh + 2 * DPR);
+        ctx.fillStyle = BADGE[k]; ctx.strokeStyle = 'rgba(15,15,15,0.85)'; ctx.lineWidth = 1.5 * DPR;
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx - bw / 2, by - bh / 2, bw, bh, 3 * DPR) : ctx.rect(bx - bw / 2, by - bh / 2, bw, bh); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#16191d'; ctx.font = font(R * 0.72, 800);
         ctx.fillText(txt, bx, by + 1);
       });
     });
@@ -782,6 +783,8 @@
       ctx.fillText(String(a.n), x, y + 1);
     }
   }
+
+  const BADGE = { fort: '#b9c3cc', mine: '#ffd84a', barracks: '#ff8f7f' };
 
   // Étoile des capitales : jaune avec un contour sombre, lisible sur toutes les couleurs
   function drawStar(cx, cy, rad) {

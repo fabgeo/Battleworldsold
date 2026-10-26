@@ -168,3 +168,9 @@ button.link:hover { background: none; text-decoration: underline; }
 #game.immersive #chooseBanner { top: max(56px, env(safe-area-inset-top, 0px)); }
 
 .credits { color: #6f7a86; font-size: 11px; margin: 12px 0 0; text-align: center; }
+
+/* Menu Bâtir : pastille de couleur du badge de chaque bâtiment */
+#buildMenu [data-build] b::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+#buildMenu [data-build="fort"] b::before { background: #b9c3cc; }
+#buildMenu [data-build="mine"] b::before { background: #ffd84a; }
+#buildMenu [data-build="barracks"] b::before { background: #ff8f7f; }

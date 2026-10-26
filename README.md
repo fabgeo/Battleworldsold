@@ -46,8 +46,9 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
   | Montagne | ×1,6 | ×0,5 | +1 |
   | Ville | ×1,1 | normale | +2 |
 
-- **Bâtiments** (test, désactivables) : Fort 20 or (+50 % de défense chacun), Mine 25 or (+2 or par versement),
-  Caserne 40 or (+1 soldat toutes les 3 s). Chaque achat rend **le même type** 20 % plus cher (les autres types ne bougent pas).
+- **Bâtiments** (test, désactivables) : Fort 30 or (+50 % de défense chacun), Mine 30 or (+2 or par versement),
+  Caserne 45 or (+1 soldat toutes les 3 s). Sur la carte, chaque territoire montre ses bâtiments, pour tous les joueurs :
+  badge gris (F = fort), jaune (M = mine), rouge (C = caserne), avec le nombre s'il y en a plusieurs. Chaque achat rend **le même type** 20 % plus cher (les autres types ne bougent pas).
   Un territoire peut avoir 1 bâtiment de chaque type ; une **capitale** (★) jusqu'à 3 de chaque, mais 2 forts au plus.
   Les bâtiments restent en place si le territoire change de main.
 - **Envoi de troupes** : depuis un de tes territoires vers n'importe quel territoire. Il reste toujours 1 soldat sur place.
@@ -86,6 +87,10 @@ humain ou bot) :
 - **défense** (normal et difficile) : ils repèrent les armées ennemies en route vers leurs territoires, n'en retirent plus
   de soldats, achètent des défenseurs sur place (priorité à la capitale, aux villes et aux montagnes) et appellent
   des renforts de leurs territoires voisins ;
+- **bâtiments** : ils n'achètent qu'avec l'or en trop (jamais au détriment de la défense ou d'une attaque à préparer),
+  en épargnant quand rien ne presse : mines à l'arrière (surtout la capitale et en début de partie), casernes près du front
+  ou sur leur base de frappe, forts sur un territoire de valeur menacé (capitale, ville, montagne), en nombre limité ;
+  après 15 minutes, ils misent sur l'offensive (casernes seulement) ;
 - un bot qui est lui-même premier cherche à achever ses adversaires. Les bots faciles restent opportunistes.
 
 ## Contrôles
