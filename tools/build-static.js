@@ -28,7 +28,8 @@ ${read('public/client.js')}
 
 const fragIdx = process.argv.indexOf('--fragment');
 if (fragIdx > 0) {
-  fs.writeFileSync(process.argv[fragIdx + 1], '<title>Battleworlds</title>\n' + content);
+  const fonts = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;700&display=swap">\n';
+  fs.writeFileSync(process.argv[fragIdx + 1], '<title>Battleworlds</title>\n' + fonts + content);
   console.log('Fragment écrit :', process.argv[fragIdx + 1]);
   process.exit(0);
 }
@@ -66,6 +67,9 @@ fs.writeFileSync(path.join(out, 'index.html'), `<!doctype html>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Battleworlds">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;700&display=swap">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-180.png">

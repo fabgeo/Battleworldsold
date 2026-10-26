@@ -37,8 +37,8 @@
   if (joinParam) $('joinCode').value = joinParam.toUpperCase();
 
   // ---------- Réglages ----------
-  const OPT_IDS = { map: 'optMap', size: 'optSize', speed: 'optSpeed', startGold: 'optGold', buildings: 'optBuild' };
-  const OPT_DEFAULT = { map: 'random', size: 'auto', speed: '1', startGold: 'auto', buildings: 'on' };
+  const OPT_IDS = { map: 'optMap', size: 'optSize', speed: 'optSpeed', startGold: 'optGold', buildings: 'optBuild', fog: 'optFog', notif: 'optNotif' };
+  const OPT_DEFAULT = { map: 'random', size: 'auto', speed: '1', startGold: 'auto', buildings: 'on', fog: 'off', notif: 'on' };
   function loadOpts() {
     let saved = {};
     try { saved = JSON.parse(store.get('bw-opts') || '{}') || {}; } catch (e) {}
@@ -53,7 +53,7 @@
   }
   function optsForEngine() {
     const o = readOpts();
-    return { map: o.map, size: o.size, speed: +o.speed, startGold: o.startGold, buildings: o.buildings === 'on' };
+    return { map: o.map, size: o.size, speed: +o.speed, startGold: o.startGold, buildings: o.buildings === 'on', fog: o.fog === 'on' };
   }
   // Nombre de territoires selon la carte et la taille
   const territoryCount = (map, sizeKey) => E.territoryCount(map, sizeKey);
@@ -77,6 +77,8 @@
     if (+o.speed !== 1) extra.push(+o.speed < 1 ? 'lente' : 'rapide');
     if (o.startGold !== 'auto') extra.push(o.startGold + ' or');
     if (o.buildings === 'off') extra.push('sans bâtiments');
+    if (o.fog === 'on') extra.push('brouillard');
+    if (o.notif === 'off') extra.push('sans notifications');
     $('settingsSummary').textContent = extra.join(' · ');
     store.set('bw-opts', JSON.stringify(readOpts()));
   }
@@ -186,12 +188,15 @@
   // ---------- Préparation de la partie ----------
   function setupGame(seed, opts) {
     G.choosing = null;
+    G.autoPick = -1; G.notified = null;
+    $('toasts').innerHTML = '';
     $('chooseBanner').classList.add('hidden');
     G.map = E.generateMap(seed, opts);
     G.selected = -1; G.hover = -1; G.baseKey = ''; G.overDismissed = false; G.overShown = false; G.finalShown = false;
     G.paused = false; setBuildOpen(false);
     G.view = { zoom: 1, cx: G.map.w / 2, cy: G.map.h / 2 };
     buildPaths();
+    computeSeaDepth();
     $('overlay').classList.add('hidden');
     $('pauseOverlay').classList.add('hidden');
     $('btnRestart').classList.toggle('hidden', G.mode !== 'solo');
@@ -261,12 +266,31 @@
     }
   }
 
+  // Profondeur de la mer (distance à la côte, en cases) : eaux claires près des côtes, plus sombres au large
+  function computeSeaDepth() {
+    const m = G.map, d = new Int8Array(m.w * m.h).fill(-1), q = [];
+    for (let i = 0; i < m.w * m.h; i++) if (m.cells[i] !== -1) { d[i] = 0; q.push(i); }
+    for (let k = 0; k < q.length; k++) {
+      const c = q[k], x = c % m.w;
+      if (d[c] >= 4) continue;
+      for (const n of [x > 0 ? c - 1 : -1, x < m.w - 1 ? c + 1 : -1, c - m.w, c + m.w]) {
+        if (n < 0 || n >= m.w * m.h || d[n] !== -1) continue;
+        d[n] = d[c] + 1; q.push(n);
+      }
+    }
+    G.seaDepth = d;
+    // contour de la mer (pour clipper les vagues)
+    G.seaPath = new Path2D();
+    for (let y = 0; y < m.h; y++) { let x = 0; while (x < m.w) { if (m.cells[y * m.w + x] !== -1) { x++; continue; } let x2 = x; while (x2 < m.w && m.cells[y * m.w + x2] === -1) x2++; G.seaPath.rect(x * S, y * S, (x2 - x) * S, S); x = x2; } }
+  }
+  const grain = (i) => (((i * 2654435761) ^ (i >>> 3) * 40503) >>> 0) % 1000 / 1000 - 0.5; // bruit fixe par case
+
   // Image de fond redessinée seulement quand les propriétaires changent
   const S = 8;
-  const SEA = [44, 74, 107], FOREIGN = [92, 96, 100]; // mer, terre hors jeu (pays voisins)
+  const SEA_DEPTH = [[54, 94, 124], [49, 87, 116], [44, 80, 108], [40, 73, 101], [36, 67, 94]], FOREIGN = [84, 88, 90];
   function rebuildBase() {
     const m = G.map, st = G.state;
-    const key = st.territories.map(t => t.owner).join(',');
+    const key = st.territories.map(t => t.owner).join(',') + (G.fogKey || '');
     if (key === G.baseKey) return;
     G.baseKey = key;
     const small = document.createElement('canvas');
@@ -275,8 +299,13 @@
     const img = sctx.createImageData(m.w, m.h);
     const cols = m.terr.map((_, i) => terrColor(i, st.territories[i].owner));
     for (let i = 0; i < m.w * m.h; i++) {
-      const c = m.cells[i] >= 0 ? cols[m.cells[i]] : m.cells[i] === -2 ? FOREIGN : SEA;
-      img.data[i * 4] = c[0]; img.data[i * 4 + 1] = c[1]; img.data[i * 4 + 2] = c[2]; img.data[i * 4 + 3] = 255;
+      const id = m.cells[i];
+      let c;
+      if (id >= 0) { c = cols[id]; if (G.fogged && G.fogged[id]) c = c.map(v => v * 0.62 + 30); }
+      else if (id === -2) c = FOREIGN;
+      else c = SEA_DEPTH[Math.max(0, Math.min(4, (G.seaDepth ? G.seaDepth[i] : 4) - 1))];
+      const g = 1 + grain(i) * (id >= 0 ? 0.07 : 0.04);
+      img.data[i * 4] = c[0] * g; img.data[i * 4 + 1] = c[1] * g; img.data[i * 4 + 2] = c[2] * g; img.data[i * 4 + 3] = 255;
     }
     sctx.putImageData(img, 0, 0);
     if (!G.base) G.base = document.createElement('canvas');
@@ -284,6 +313,14 @@
     const b = G.base.getContext('2d');
     b.imageSmoothingEnabled = false;
     b.drawImage(small, 0, 0, m.w * S, m.h * S);
+    // vagues : fines hachures en diagonale sur la mer
+    if (G.seaPath) {
+      b.save(); b.clip(G.seaPath);
+      b.strokeStyle = 'rgba(200,225,245,0.07)'; b.lineWidth = 1;
+      b.beginPath();
+      for (let x = -m.h * S; x < m.w * S; x += 14) { b.moveTo(x, 0); b.lineTo(x + m.h * S, m.h * S); }
+      b.stroke(); b.restore();
+    }
     drawTerrainGlyphs(b);
     // Frontières : fines entre territoires, épaisses entre propriétaires, côtes
     const thin = new Path2D(), thick = new Path2D(), coast = new Path2D();
@@ -292,17 +329,40 @@
       p.moveTo(x1 * S, y1 * S); p.lineTo(x2 * S, y2 * S);
     }
     b.lineCap = 'round';
-    b.strokeStyle = 'rgba(40,30,20,0.35)'; b.lineWidth = 1.2; b.stroke(thin);
-    b.strokeStyle = 'rgba(15,30,50,0.8)'; b.lineWidth = 2; b.stroke(coast);
-    b.strokeStyle = 'rgba(25,20,15,0.85)'; b.lineWidth = 3; b.stroke(thick);
+    b.strokeStyle = 'rgba(40,30,20,0.32)'; b.lineWidth = 1.2; b.stroke(thin);
+    b.strokeStyle = 'rgba(230,240,245,0.22)'; b.lineWidth = 3; b.stroke(coast); // écume
+    b.strokeStyle = 'rgba(20,32,44,0.85)'; b.lineWidth = 1.6; b.stroke(coast);
+    b.strokeStyle = 'rgba(22,18,14,0.85)'; b.lineWidth = 3; b.stroke(thick);
     // Passages maritimes
-    b.strokeStyle = 'rgba(220,235,255,0.55)'; b.lineWidth = 2; b.setLineDash([6, 6]);
+    b.strokeStyle = 'rgba(235,225,190,0.6)'; b.lineWidth = 2; b.setLineDash([6, 6]);
     for (const [a, c] of m.seaLinks) {
       const P = E.crossingPoint(m, a, c);
       b.beginPath(); b.moveTo(m.terr[a].lx * S, m.terr[a].ly * S); b.lineTo(P[0] * S, P[1] * S); b.lineTo(m.terr[c].lx * S, m.terr[c].ly * S); b.stroke();
     }
     b.setLineDash([]);
-    b.strokeStyle = 'rgba(25,20,15,0.9)'; b.lineWidth = 4; b.strokeRect(0, 0, m.w * S, m.h * S);
+    // cadre laiton
+    b.strokeStyle = 'rgba(201,162,74,0.9)'; b.lineWidth = 4; b.strokeRect(2, 2, m.w * S - 4, m.h * S - 4);
+    b.strokeStyle = 'rgba(15,19,24,0.9)'; b.lineWidth = 1.5; b.strokeRect(7, 7, m.w * S - 14, m.h * S - 14);
+  }
+
+  // Fond autour de la carte : bleu nuit, méridiens discrets, vignette (mis en cache à chaque redimensionnement)
+  function drawBackdrop() {
+    if (!G.backdrop || G.backdrop.width !== canvas.width || G.backdrop.height !== canvas.height) {
+      const c = G.backdrop = document.createElement('canvas');
+      c.width = canvas.width; c.height = canvas.height;
+      const x = c.getContext('2d');
+      x.fillStyle = '#0f1419'; x.fillRect(0, 0, c.width, c.height);
+      x.strokeStyle = 'rgba(201,162,74,0.06)'; x.lineWidth = 1;
+      const step = 56 * DPR;
+      x.beginPath();
+      for (let i = step / 2; i < c.width; i += step) { x.moveTo(i, 0); x.lineTo(i, c.height); }
+      for (let j = step / 2; j < c.height; j += step) { x.moveTo(0, j); x.lineTo(c.width, j); }
+      x.stroke();
+      const g = x.createRadialGradient(c.width / 2, c.height / 2, Math.min(c.width, c.height) * 0.2, c.width / 2, c.height / 2, Math.max(c.width, c.height) * 0.75);
+      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.55)');
+      x.fillStyle = g; x.fillRect(0, 0, c.width, c.height);
+    }
+    ctx.drawImage(G.backdrop, 0, 0);
   }
 
   // ---------- Vue ----------
@@ -485,6 +545,7 @@
   // À la souris : clic gauche = attaquer (sur un de mes territoires, il le sélectionne), clic droit = renforcer
   // un de mes territoires. Au doigt, toucher n'importe quelle cible envoie les troupes (attaque ou renfort).
   function onClick(t, mouse) {
+    if (G.autoPick >= 0) { pickAutoTarget(t); return; }
     if (t < 0) { G.selected = -1; return; }
     const st = G.state, sel = G.selected;
     if (t === sel) { G.selected = -1; return; }
@@ -496,7 +557,31 @@
     }
     G.selected = t;
   }
+  // ---------- Envois automatiques ----------
+  // Bouton « Auto » (ou touche R) sur un de mes territoires, puis toucher un autre de mes territoires :
+  // ses soldats y partiront tout seuls toutes les 2 s. Sur un territoire qui a déjà une route : l'arrête.
+  function toggleAuto(useHover) {
+    const t = actionTarget(useHover);
+    if (t < 0 || !G.state || G.state.territories[t].owner !== G.me) return;
+    if (G.state.territories[t].auto >= 0) { act({ type: 'auto', from: t, to: -1 }); toast('Envoi automatique arrêté', 'info'); G.selected = -1; return; }
+    G.autoPick = t;
+    G.selected = t;
+    toast('Touche le territoire qui recevra les renforts', 'info');
+  }
+  function pickAutoTarget(t) {
+    const from = G.autoPick;
+    G.autoPick = -1;
+    document.querySelectorAll('#toasts .toast.info').forEach(el => el.remove()); // la consigne n'est plus utile
+    G.selected = -1;
+    if (t < 0 || t === from) return;
+    if (G.state.territories[t].owner !== G.me) { toast('Choisis un de tes territoires', 'warn'); return; }
+    act({ type: 'auto', from, to: t });
+    toast(`Renforts automatiques : ${G.map.terr[from].name} → ${G.map.terr[t].name}`, 'good');
+  }
+  $('btnAuto').onclick = () => { if (G.autoPick >= 0) { G.autoPick = -1; G.selected = -1; } else toggleAuto(false); };
+
   function onRightClick(t) {
+    if (G.autoPick >= 0) { pickAutoTarget(t); return; }
     const st = G.state, sel = G.selected;
     if (sel >= 0 && t >= 0 && t !== sel && st.territories[sel].owner === G.me && st.territories[t].owner === G.me) sendTroops(sel, t);
     G.selected = -1;
@@ -571,9 +656,11 @@
     { id: 'buildFort', label: 'Construire un Fort', def: { key: 'f', code: '' }, run: () => build('fort', true) },
     { id: 'buildMine', label: 'Construire une Mine', def: { key: 'm', code: '' }, run: () => build('mine', true) },
     { id: 'buildBarracks', label: 'Construire une Caserne', def: { key: 'c', code: '' }, run: () => build('barracks', true) },
+    { group: 'Envois automatiques' },
+    { id: 'auto', label: 'Route auto (puis clic sur la cible)', def: { key: 'r', code: '' }, run: () => toggleAuto(true) },
     { group: 'Divers' },
     { id: 'capital', label: 'Sélectionner ma capitale', def: { key: 'h', code: '' }, run: selectCapital },
-    { id: 'deselect', label: 'Désélectionner', def: { key: 'Escape', code: 'Escape' }, run: () => { G.selected = -1; setBuildOpen(false); } },
+    { id: 'deselect', label: 'Désélectionner', def: { key: 'Escape', code: 'Escape' }, run: () => { G.selected = -1; G.autoPick = -1; setBuildOpen(false); } },
     { id: 'pause', label: 'Pause (solo)', def: { key: 'p', code: '' }, run: () => { if (G.mode === 'solo') setPaused(!G.paused); } },
   ];
   let keys = {};
@@ -677,9 +764,9 @@
   function draw() {
     const st = G.state, m = G.map;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#1d2228';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    drawBackdrop();
     if (!st || !m) return;
+    updateFog();
     rebuildBase();
 
     const s = viewScale();
@@ -699,7 +786,31 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     const R = Math.max(9 * DPR, Math.min(20 * DPR, s * 1.5));
-    const font = (px, w) => `${w || 600} ${Math.round(px)}px system-ui, sans-serif`;
+    const font = (px, w) => `${w || 600} ${Math.round(px)}px 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif`;
+    const seen = (i) => !G.fogged || !G.fogged[i];
+
+    // Routes d'envoi automatique : flèche courbe animée vers le territoire qui reçoit les renforts
+    const now = performance.now() / 1000;
+    st.territories.forEach((t, i) => {
+      if (t.auto < 0 || t.owner < 0 || (t.owner !== G.me && (!seen(i) || !seen(t.auto)))) return;
+      const [x1, y1] = toScreen(m.terr[i].lx, m.terr[i].ly), [x2, y2] = toScreen(m.terr[t.auto].lx, m.terr[t.auto].ly);
+      const mx = (x1 + x2) / 2 - (y2 - y1) * 0.18, my = (y1 + y2) / 2 + (x2 - x1) * 0.18;
+      ctx.lineCap = 'round';
+      for (const [w, col] of [[5 * DPR, 'rgba(10,12,16,0.6)'], [2.5 * DPR, st.players[t.owner].color]]) {
+        ctx.strokeStyle = col; ctx.lineWidth = w; ctx.setLineDash([9 * DPR, 7 * DPR]); ctx.lineDashOffset = -now * 24 * DPR;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(mx, my, x2, y2); ctx.stroke();
+      }
+      ctx.setLineDash([]); ctx.lineDashOffset = 0;
+      const ang = Math.atan2(y2 - my, x2 - mx), ah = R * 0.9, tx = x2 - Math.cos(ang) * R * 1.1, ty = y2 - Math.sin(ang) * R * 1.1;
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.cos(ang - 0.5) * ah, ty - Math.sin(ang - 0.5) * ah); ctx.lineTo(tx - Math.cos(ang + 0.5) * ah, ty - Math.sin(ang + 0.5) * ah); ctx.closePath();
+      ctx.fillStyle = st.players[t.owner].color; ctx.fill(); ctx.lineWidth = 1.5 * DPR; ctx.strokeStyle = 'rgba(10,12,16,0.8)'; ctx.stroke();
+    });
+    // territoire de départ d'une route en cours de création
+    if (G.autoPick >= 0) {
+      const [x, y] = toScreen(m.terr[G.autoPick].lx, m.terr[G.autoPick].ly);
+      ctx.beginPath(); ctx.arc(x, y, R * (1.6 + 0.2 * Math.sin(now * 5)), 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(201,162,74,0.9)'; ctx.lineWidth = 2.5 * DPR; ctx.stroke();
+    }
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
     // Aperçu du trajet depuis la sélection vers la cible survolée (souris) ou glissée
@@ -728,23 +839,30 @@
       }
     }
 
-    // Étiquettes de territoire
+    // Étiquettes de territoire : pion en relief avec le nombre de soldats
     st.territories.forEach((t, i) => {
       const T = m.terr[i];
       const [x, y] = toScreen(T.lx, T.ly);
+      const vis = seen(i);
       const col = t.owner >= 0 ? st.players[t.owner].color : '#7d735f';
-      const txt = String(t.troops);
+      const txt = vis ? String(t.troops) : '?';
       const r = R + Math.max(0, txt.length - 2) * R * 0.3;
+      ctx.beginPath(); ctx.arc(x, y + R * 0.12, r, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fill(); // ombre
+      const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+      g.addColorStop(0, shade(col, 0.35)); g.addColorStop(1, shade(col, vis ? -0.15 : -0.45));
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = col; ctx.fill();
-      ctx.lineWidth = 2 * DPR; ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.stroke();
-      ctx.fillStyle = '#fff'; ctx.font = font(R * 1.0);
+      ctx.fillStyle = g; ctx.fill();
+      ctx.lineWidth = 2 * DPR; ctx.strokeStyle = 'rgba(12,14,18,0.85)'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y, r - 2.2 * DPR, 0, Math.PI * 2); ctx.lineWidth = 1 * DPR; ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = font(R * 1.08, 700);
       ctx.fillText(txt, x, y + 1);
       const caps = st.capitals || st.players.map(pl => pl.capital);
       if (caps.includes(i)) drawStar(x, y - r - R * 0.35, R * 0.62);
-      ctx.font = font(R * 0.75, 700); ctx.fillStyle = 'rgba(30,25,15,0.85)';
+      ctx.font = font(R * 0.78, 700);
       const inc = T.income + E.TERRAIN[T.terrain].income + 2 * E.countOf(t, 'mine');
-      ctx.fillText('+' + inc, x, y + r + R * 0.55);
+      ctx.lineWidth = 3 * DPR; ctx.strokeStyle = 'rgba(245,238,220,0.75)'; ctx.strokeText('+' + inc, x, y + r + R * 0.55);
+      ctx.fillStyle = 'rgba(30,25,15,0.9)'; ctx.fillText('+' + inc, x, y + r + R * 0.55);
+      if (!vis) return; // brouillard : bâtiments inconnus
       // un badge par type de bâtiment (avec le nombre s'il y en a plusieurs), empilés à droite de l'étiquette
       // couleur par type : Fort gris pierre, Mine or, Caserne rouge (visible pour tous les joueurs)
       Object.keys(E.BUILDINGS).filter(k => t.buildings.includes(k)).forEach((k, j) => {
@@ -760,8 +878,10 @@
     // Armées en mouvement
     const extra = G.mode === 'multi' ? Math.min(0.15, (performance.now() - G.lastStateAt) / 1000) * st.opts.speed : 0;
     for (const a of st.armies) {
+      if (a.owner !== G.me && !seen(a.from) && !seen(a.to)) continue; // brouillard
       const k = Math.min(1, (a.t + extra) / a.dur);
       const [x, y] = toScreen(...E.legPos(m, a.from, a.to, k));
+      const [nx, ny] = toScreen(...E.legPos(m, a.from, a.to, Math.min(1, k + 0.03)));
       if (a.owner === G.me) {
         ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2 * DPR; ctx.setLineDash([5 * DPR, 5 * DPR]);
         ctx.beginPath(); ctx.moveTo(x, y);
@@ -775,16 +895,37 @@
         }
         ctx.stroke(); ctx.setLineDash([]);
       }
-      const r = R * 0.75;
-      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+      // armée : pion avec une pointe dans le sens de la marche
+      const r = R * 0.78, ang = Math.atan2(ny - y, nx - x);
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(ang) * r * 1.75, y + Math.sin(ang) * r * 1.75);
+      ctx.lineTo(x + Math.cos(ang + 0.75) * r, y + Math.sin(ang + 0.75) * r);
+      ctx.arc(x, y, r, ang + 0.75, ang - 0.75 + Math.PI * 2);
+      ctx.closePath();
       ctx.fillStyle = st.players[a.owner].color; ctx.fill();
-      ctx.lineWidth = 2 * DPR; ctx.strokeStyle = '#fff'; ctx.stroke();
-      ctx.fillStyle = '#fff'; ctx.font = font(R * 0.8);
+      ctx.lineWidth = 2 * DPR; ctx.strokeStyle = '#f5eedc'; ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = font(R * 0.86, 700);
       ctx.fillText(String(a.n), x, y + 1);
     }
   }
 
   const BADGE = { fort: '#b9c3cc', mine: '#ffd84a', barracks: '#ff8f7f' };
+  // éclaircit (f > 0) ou assombrit (f < 0) une couleur #rrggbb
+  function shade(hex, f) {
+    const c = hexRgb(hex).map(v => Math.round(f > 0 ? v + (255 - v) * f : v * (1 + f)));
+    return `rgb(${c[0]},${c[1]},${c[2]})`;
+  }
+
+  // ---------- Brouillard de guerre (option) ----------
+  // On voit ses territoires et leurs voisins ; ailleurs, soldats, bâtiments et armées sont cachés.
+  function updateFog() {
+    const st = G.state, m = G.map;
+    if (!st.opts.fog || G.choosing || G.me < 0 || st.winner != null) { if (G.fogged) { G.fogged = null; G.fogKey = ''; } return; }
+    const vis = new Uint8Array(m.terr.length);
+    st.territories.forEach((t, i) => { if (t.owner === G.me) { vis[i] = 1; for (const n of m.terr[i].neighbors) vis[n] = 1; } });
+    G.fogged = Array.from(vis, v => !v);
+    G.fogKey = '|' + G.fogged.map(v => (v ? 1 : 0)).join('');
+  }
 
   // Étoile des capitales : jaune avec un contour sombre, lisible sur toutes les couleurs
   function drawStar(cx, cy, rad) {
@@ -807,9 +948,60 @@
     const bld = t.buildings.length ? ' · ' + Object.keys(E.BUILDINGS).filter(k => t.buildings.includes(k))
       .map(k => E.BUILDINGS[k].name + (E.countOf(t, k) > 1 ? ' ×' + E.countOf(t, k) : '')).join(', ') : '';
     if (t.owner === G.me) return `${ter}${bld} · ${t.troops} soldats · +${inc} or`;
+    if (G.fogged && G.fogged[i]) return `${owner} · ${ter} · caché par le brouillard`;
     const def = E.defenseOf(st, m, i);
     const need = Math.ceil(t.troops * def / 0.85) + 1;
     return `${owner} · ${ter}${bld} · ${t.troops} soldats · défense ×${def.toFixed(1).replace('.', ',')} → ~${need} pour le prendre`;
+  }
+
+  // ---------- Notifications (option) ----------
+  function toast(text, kind) {
+    const box = $('toasts');
+    const el = document.createElement('div');
+    el.className = 'toast ' + (kind || 'info');
+    el.textContent = text;
+    box.prepend(el);
+    while (box.children.length > 4) box.lastChild.remove();
+    setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, 4500);
+  }
+  // Compare l'état avec le précédent pour signaler : capitale attaquée, capitale prise, joueur éliminé, domination proche
+  function checkEvents() {
+    const st = G.state, m = G.map;
+    if (!st || G.choosing || st.winner != null) return;
+    const on = $('optNotif').value !== 'off';
+    const caps = st.capitals || [];
+    const snap = { capOwner: caps.map(c => st.territories[c].owner), alive: st.players.map(p => p.alive), warned: G.notified ? G.notified.warned : {}, armies: G.notified ? G.notified.armies : new Set() };
+    const prev = G.notified;
+    G.notified = snap;
+    if (!prev || !on) return;
+    const name = (i) => (i === G.me ? 'toi' : st.players[i].name);
+    caps.forEach((c, k) => {
+      const before = prev.capOwner[k], after = snap.capOwner[k];
+      if (before === after || after < 0) return;
+      const orig = st.players.findIndex((p, i) => st.capitals[i] === c);
+      if (after === G.me) toast(`Tu as pris la capitale de ${st.players[orig].name} !`, 'good');
+      else if (before === G.me) toast(`Ta capitale ${m.terr[c].name} est tombée aux mains de ${st.players[after].name} !`, 'bad');
+      else toast(`${st.players[after].name} a pris la capitale de ${name(orig)}`, 'info');
+    });
+    st.players.forEach((p, i) => {
+      if (prev.alive[i] && !p.alive) toast(i === G.me ? 'Tu as été éliminé…' : `${p.name} est éliminé${p.lastHitBy === G.me ? ' — tu récupères son or' : ''}`, i === G.me ? 'bad' : p.lastHitBy === G.me ? 'good' : 'info');
+    });
+    // ma capitale menacée par une armée en route
+    const myCap = st.players[G.me].capital;
+    if (myCap != null && st.territories[myCap].owner === G.me) {
+      for (const a of st.armies) {
+        if (a.owner === G.me || snap.armies.has(a.id)) continue;
+        const route = [a.to].concat(a.path || []);
+        const firstMine = route.find(v => st.territories[v].owner === G.me);
+        if (firstMine === myCap) { snap.armies.add(a.id); toast(`Ta capitale est attaquée par ${st.players[a.owner].name} (${a.n} soldats) !`, 'bad'); }
+      }
+    }
+    // domination proche (60 %)
+    const counts = st.players.map(() => 0);
+    st.territories.forEach(t => { if (t.owner >= 0) counts[t.owner]++; });
+    counts.forEach((c, i) => {
+      if (c >= m.terr.length * 0.6 && !snap.warned[i]) { snap.warned[i] = true; toast(i === G.me ? 'Tu contrôles 60 % de la carte : encore un effort (75 %) !' : `${st.players[i].name} contrôle 60 % de la carte !`, i === G.me ? 'good' : 'warn'); }
+    });
   }
 
   function updateUI() {
@@ -827,7 +1019,8 @@
     const counts = st.players.map(() => 0);
     st.territories.forEach(t => { if (t.owner >= 0) counts[t.owner]++; });
     const order = st.players.map((p, i) => i).sort((a, b) => counts[b] - counts[a]);
-    $('scoreboard').innerHTML = order.map(i => {
+    const goal = Math.ceil(m.terr.length * (st.opts.domination || 0.75));
+    $('scoreboard').innerHTML = `<div class="goal">Victoire : ${goal} territoires (75 %)</div>` + order.map(i => {
       const p = st.players[i];
       return `<div class="${p.alive ? '' : 'dead'}"><span class="dot" style="background:${p.color}"></span>${escapeHtml(p.name)}${i === G.me ? ' (toi)' : ''}<span class="n">${counts[i]}</span></div>`;
     }).join('');
@@ -860,6 +1053,15 @@
       b.querySelector('i').textContent = room(k) <= 0 ? (max > 1 ? `Maximum (${n}/${max})` : 'Déjà construit') : cost + ' or' + (max > 1 ? ` · ${n}/${max}` : '');
     });
 
+    // Envoi automatique : bouton selon l'état
+    const autoBtn = $('btnAuto');
+    autoBtn.disabled = !own && G.autoPick < 0;
+    autoBtn.classList.toggle('active', G.autoPick >= 0);
+    autoBtn.textContent = G.autoPick >= 0 ? 'Annuler' : own && st.territories[sel].auto >= 0 ? 'Stop auto' : 'Auto';
+    if (G.autoPick >= 0) { $('pName').textContent = 'Route automatique'; $('pInfo').textContent = 'Touche le territoire qui recevra les renforts'; }
+
+    checkEvents();
+
     // Fin de partie / élimination
     if (st.winner != null && !G.finalShown) showEnd(true);
     else if (!me.alive && !G.overShown && !G.overDismissed) showEnd(false);
@@ -873,7 +1075,8 @@
     if (over) G.finalShown = true;
     setPaused(false);
     const me = st.players[G.me];
-    $('overTitle').textContent = over ? (st.winner === G.me ? 'Victoire !' : st.winner >= 0 ? `Défaite. ${st.players[st.winner].name} a gagné` : 'Match nul') : 'Tu as été éliminé';
+    const how = st.winBy === 'domination' ? ' par domination' : '';
+    $('overTitle').textContent = over ? (st.winner === G.me ? `Victoire${how} !` : st.winner >= 0 ? `Défaite. ${st.players[st.winner].name} a gagné${how}` : 'Match nul') : 'Tu as été éliminé';
     $('overSub').textContent = over ? 'Durée de la partie : ' + fmtTime(st.time) : `Éliminé après ${fmtTime(me.stats.outAt || st.time)}. La partie continue entre les autres joueurs.`;
     $('btnWatch').classList.toggle('hidden', over);
     $('btnAgain').classList.toggle('hidden', G.mode !== 'solo');

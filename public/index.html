@@ -4,14 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Battleworlds</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;700&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <!-- Menu -->
   <section id="menu" class="screen">
     <div class="card">
+      <div class="crest" aria-hidden="true">✦</div>
       <h1>Battleworlds</h1>
-      <p class="sub">Conquête de territoires</p>
+      <p class="sub tagline">Conquête de territoires</p>
       <label>Ton nom <input id="name" maxlength="16" placeholder="Joueur"></label>
 
       <div class="row">
@@ -26,6 +30,8 @@
           <label>Vitesse <select id="optSpeed"><option value="0.75">Lente</option><option value="1">Normale</option><option value="1.5">Rapide</option></select></label>
           <label>Or de départ <select id="optGold"><option value="auto">Auto (25)</option><option value="0">0</option><option value="100">100</option><option value="300">300</option></select></label>
           <label>Bâtiments <select id="optBuild"><option value="on">Oui (test)</option><option value="off">Non</option></select></label>
+          <label>Brouillard de guerre <select id="optFog"><option value="off">Non</option><option value="on">Oui</option></select></label>
+          <label>Notifications <select id="optNotif"><option value="on">Oui (test)</option><option value="off">Non</option></select></label>
         </div>
         <button id="btnResetOpts" class="link">Tout remettre en auto</button>
       </details>
@@ -88,6 +94,7 @@
       </div>
     </div>
     <div id="scoreboard"></div>
+    <div id="toasts" aria-live="polite"></div>
     <div id="chooseBanner" class="hidden">
       <b>Choisis ton territoire de départ</b>
       <small>La partie commence dès que tu cliques sur un territoire. Les bots se placeront loin de toi.</small>
@@ -103,6 +110,7 @@
       <div class="group"><span>Achat <small id="pCost"></small></span>
         <button data-buy="1">+1</button><button data-buy="5">+5</button><button data-buy="10" class="wide-only">+10</button><button data-buy="max">Max</button>
         <button id="btnBuild">Bâtir</button>
+        <button id="btnAuto" title="Envoi automatique des renforts vers un de tes territoires">Auto</button>
       </div>
       <div class="group"><span>Envoi</span>
         <button data-pct="25">25%</button><button data-pct="50">50%</button><button data-pct="75">75%</button><button data-pct="100">100%</button>

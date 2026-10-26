@@ -79,7 +79,7 @@ async function api(req, res, route) {
     const code = newCode();
     const id = crypto.randomUUID(), token = crypto.randomUUID();
     const o = body.opts || {};
-    const opts = { map: o.map, size: o.size, speed: o.speed, startGold: o.startGold, buildings: o.buildings };
+    const opts = { map: o.map, size: o.size, speed: o.speed, startGold: o.startGold, buildings: o.buildings, fog: o.fog };
     const room = { code, host: id, opts, players: [{ id, name, bot: false, token }], clients: [], game: null, timer: null, lastActive: Date.now() };
     rooms.set(code, room);
     return json(res, 200, { code, id, token });

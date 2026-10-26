@@ -67,7 +67,7 @@
     const size = SIZES[sizeKey];
     const speed = [0.75, 1, 1.5].includes(+opts.speed) ? +opts.speed : 1;
     const startGold = opts.startGold === 'auto' || opts.startGold == null || isNaN(+opts.startGold) ? CFG.START_GOLD : Math.max(0, Math.min(1000, +opts.startGold));
-    return { map, sizeKey, size, speed, startGold, buildings: opts.buildings !== false };
+    return { map, sizeKey, size, speed, startGold, buildings: opts.buildings !== false, fog: !!opts.fog, domination: 0.75 };
   }
 
   // ---------- RNG déterministe ----------
@@ -342,7 +342,7 @@
     opts = resolveOpts(opts, players.length);
     const state = {
       time: 0, rng: seed | 0, incomeAcc: 0, sec: 0, nextArmy: 1, winner: null, opts,
-      territories: map.terr.map(() => ({ owner: -1, troops: 0, buildings: [] })),
+      territories: map.terr.map(() => ({ owner: -1, troops: 0, buildings: [], auto: -1 })), // auto : envoi automatique vers ce territoire
       players: [], armies: [], history: [], bigBattle: null,
     };
     for (let i = 0; i < map.terr.length; i++) {
@@ -462,6 +462,18 @@
     return path;
   }
 
+  // Chemin entièrement dans mes territoires (pour les envois automatiques)
+  function ownPath(state, map, pi, from, to) {
+    const prev = new Map([[from, -1]]), q = [from];
+    for (let k = 0; k < q.length; k++) for (const n of map.terr[q[k]].neighbors) {
+      if (prev.has(n) || state.territories[n].owner !== pi) continue;
+      prev.set(n, q[k]);
+      if (n === to) return true;
+      q.push(n);
+    }
+    return false;
+  }
+
   // Retourne true si l'action est valide et appliquée
   function applyAction(state, map, pi, act) {
     if (state.winner != null || !act) return false;
@@ -486,6 +498,16 @@
       t.buildings.push(act.kind);
       p.stats.built++;
       p.stats.builtKind[act.kind] = (p.stats.builtKind[act.kind] || 0) + 1;
+      return true;
+    }
+    if (act.type === 'auto') {
+      // Envoi automatique : les soldats de `from` partent régulièrement vers `to` (un de mes territoires) ; to = -1 l'arrête
+      const from = state.territories[act.from];
+      if (!from || from.owner !== pi) return false;
+      if (act.to === -1 || act.to == null) { from.auto = -1; return true; }
+      const to = state.territories[act.to];
+      if (!to || to.owner !== pi || act.to === act.from || !ownPath(state, map, pi, act.from, act.to)) return false;
+      from.auto = act.to;
       return true;
     }
     if (act.type === 'send') {
@@ -516,6 +538,7 @@
     if (att > def) {
       const prev = t.owner;
       t.owner = a.owner;
+      t.auto = -1;
       t.troops = Math.max(1, Math.round(att - def));
       const me = state.players[a.owner];
       me.stats.captures++;
@@ -567,6 +590,13 @@
       state.sec++;
       if (state.sec % CFG.INCOME_EVERY === 0) state.players.forEach((p, i) => { if (p.alive) p.gold += incomeOf(state, map, i); });
       if (state.sec % CFG.BARRACKS_EVERY === 0) for (const t of state.territories) if (t.owner >= 0) t.troops += countOf(t, 'barracks');
+      // envois automatiques toutes les 2 s (la route s'arrête si un des deux territoires change de main ou si le chemin est coupé)
+      if (state.sec % 2 === 0) state.territories.forEach((t, i) => {
+        if (t.auto < 0) return;
+        const dst = state.territories[t.auto];
+        if (t.owner < 0 || dst.owner !== t.owner || !ownPath(state, map, t.owner, i, t.auto)) { t.auto = -1; return; }
+        if (t.troops >= 3) applyAction(state, map, t.owner, { type: 'send', from: i, to: t.auto, n: t.troops - 1 });
+      });
       if (state.sec % CFG.HISTORY_EVERY === 0) recordHistory(state);
     }
 
@@ -610,8 +640,15 @@
       }
     });
     const alive = state.players.map((p, i) => (p.alive ? i : -1)).filter(i => i >= 0);
-    if (alive.length <= 1 && state.players.length > 1) {
+    // Victoire par domination : contrôler 75 % des territoires
+    const dom = counts.findIndex(c => c >= Math.ceil(state.territories.length * (state.opts.domination || 1)));
+    if (dom >= 0 && state.players.length > 1) {
+      state.winner = dom;
+      state.winBy = 'domination';
+      recordHistory(state);
+    } else if (alive.length <= 1 && state.players.length > 1) {
       state.winner = alive.length ? alive[0] : -1;
+      state.winBy = 'elimination';
       recordHistory(state);
     }
 

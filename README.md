@@ -11,6 +11,13 @@ npm start          # http://localhost:3000  (PORT=xxxx pour changer)
 Aucune dépendance : il faut juste Node.js 18+. Pour jouer à plusieurs, les autres joueurs
 ouvrent l'adresse du serveur (ex. `http://<ton-ip>:3000`) et entrent le code de la partie.
 
+## Multijoueur en ligne
+
+GitHub Pages n'héberge que des pages fixes : la version en ligne est donc **solo**. Le multijoueur a besoin du serveur
+(`server.js`). Pour le mettre en ligne gratuitement : créer un compte sur [Render](https://render.com), puis
+*New + → Blueprint* et choisir ce dépôt (le fichier `render.yaml` est prêt). L'adresse donnée par Render ouvre le jeu
+complet, multijoueur compris (sur l'offre gratuite, le serveur s'endort après 15 min sans visite et met ~1 min à se réveiller).
+
 ## Jouer en ligne (GitHub Pages)
 
 La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (dossier `docs/`).
@@ -59,7 +66,10 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
 - **Combat** : les défenseurs comptent ×1,2 × terrain × fort, l'attaque a ±15 % d'aléatoire.
 - Chaque **capitale de départ** (joueur et bots) garde une étoile ★ toute la partie.
 - **Capitale prise** : le vaincu perd la moitié de son or, que le vainqueur récupère.
-- Un joueur sans territoire ni armée en marche est éliminé : celui qui lui a pris son dernier territoire **récupère tout son or restant**. Le dernier en vie gagne.
+- Un joueur sans territoire ni armée en marche est éliminé : celui qui lui a pris son dernier territoire **récupère tout son or restant**.
+- **Victoire** : contrôler **75 % des territoires** (domination), ou être le dernier en vie.
+- **Envois automatiques** : une route entre deux de tes territoires reliés ; toutes les 2 s, les soldats du premier
+  (sauf 1) partent vers le second. Elle s'arrête si un des deux change de main ou si le chemin est coupé.
   À la fin : statistiques (territoires au fil du temps, captures, soldats achetés, plus grande bataille).
 
 ## Début de partie
@@ -69,8 +79,9 @@ aussitôt ; les bots se placent le plus loin possible de toi.
 
 ## Réglages de partie
 
-Carte et taille sont directement dans le menu ; vitesse (lente / normale / rapide), or de départ et bâtiments
-sont dans « Autres réglages ». Tout est sur « Auto » par défaut (taille : petite jusqu'à 3 joueurs, moyenne jusqu'à 5,
+Carte et taille sont directement dans le menu ; vitesse (lente / normale / rapide), or de départ, bâtiments,
+**brouillard de guerre** (tu ne vois les soldats, bâtiments et armées que sur tes territoires et leurs voisins)
+et **notifications** (capitale attaquée, capitale prise, joueur éliminé, domination proche) sont dans « Autres réglages ». Tout est sur « Auto » par défaut (taille : petite jusqu'à 3 joueurs, moyenne jusqu'à 5,
 grande au-delà). En multi, ce sont les réglages de l'hôte qui s'appliquent.
 
 ## Bots
@@ -107,6 +118,8 @@ humain ou bot) :
   Glisser ailleurs sur la carte la déplace, sans envoyer de troupes.
 - Au doigt, toucher près d'un rond de troupes suffit : le territoire le plus proche est choisi (pratique pour les petits territoires).
 - Après une action (envoi, achat, construction), la sélection s'enlève : le clic suivant sélectionne.
+- **Envoi automatique** : sélectionne un de tes territoires, bouton **Auto** (ou touche `R` en survolant le territoire),
+  puis touche le territoire qui recevra les renforts. Une flèche animée montre la route ; **Stop auto** l'arrête.
 - Barre du bas : achat (+1, +5, +10, Max), **Bâtir**, et part des troupes envoyées (25 à 100 %). Sur PC, elle est centrée avec de grands boutons.
 - Barre du haut : Quitter, Recommencer, **Pause** (solo), **Plein écran**. En plein écran, la carte prend tout l'écran ;
   téléphone à l'horizontale : boutons en colonnes à gauche et à droite de la carte.
@@ -119,6 +132,7 @@ humain ou bot) :
   | Envoyer 25 / 50 / 75 / 100 % | `1` `2` `3` `4` (ou `&` `é` `"` `'` en AZERTY) |
   | Acheter +1 / +5 / +10 / maximum | `A` `Z` `E` `B` |
   | Construire Fort / Mine / Caserne | `F` `M` `C` |
+  | Route automatique (puis clic sur la cible) | `R` |
   | Sélectionner ma capitale | `H` |
   | Désélectionner | `Échap` (ou clic droit dans le vide) |
   | Pause (solo) | `P` |

@@ -1,0 +1,9 @@
+# Déploiement du serveur multijoueur sur Render (offre gratuite) : https://render.com
+# New + → Blueprint → choisir ce dépôt : Render lit ce fichier et lance « npm start ».
+services:
+  - type: web
+    name: battleworlds
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
