@@ -8,7 +8,8 @@
   const CFG = {
     SOLDIER_COST: 4,
     BASE_INCOME: 5,        // or/s pour chaque joueur, quoi qu'il possède
-    CAPITAL_BONUS: 3,      // or/s en plus pour la capitale
+    CAPITAL_BONUS: 5,      // or en plus par versement pour la case d'une capitale (pour celui qui la tient)
+    RICH_BONUS: 2,         // or en plus par versement pour une case de zone riche
     START_GOLD: 25,
     START_TROOPS: 12,
     DEF_BONUS: 1.2,        // multiplicateur de base des défenseurs
@@ -48,7 +49,14 @@
   const countOf = (t, kind) => t.buildings.reduce((n, k) => n + (k === kind), 0);
   function maxBuildings(state, ti, kind) {
     const isCap = (state.capitals || []).includes(ti);
-    return isCap ? (kind === 'fort' ? 2 : 3) : 1;
+    if (kind === 'fort') return isCap ? 2 : 1;
+    return isCap ? 4 : 2;
+  }
+  // Or rapporté par un territoire à chaque versement : base + terrain + mines + capitale + zone riche
+  function terrIncome(state, map, i) {
+    const t = state.territories[i];
+    return map.terr[i].income + TERRAIN[map.terr[i].terrain].income + 2 * countOf(t, 'mine')
+      + ((state.capitals || []).includes(i) ? CFG.CAPITAL_BONUS : 0) + (state.rich && state.rich[i] ? CFG.RICH_BONUS : 0);
   }
 
   const SIZES = { small: 25, medium: 40, large: 60 }; // territoires de la carte aléatoire
@@ -348,6 +356,16 @@
     for (let i = 0; i < map.terr.length; i++) {
       state.territories[i].troops = 2 + map.terr[i].income * 2 + Math.floor(srand(state) * 4);
     }
+    // Zones riches : petits groupes de 2-3 territoires voisins qui rapportent plus (mieux gardés au départ)
+    state.rich = map.terr.map(() => 0);
+    const nZones = Math.max(2, Math.round(map.terr.length / 14));
+    for (let z = 0, tries = 0; z < nZones && tries < 200; tries++) {
+      const c = Math.floor(srand(state) * map.terr.length);
+      if (state.rich[c] || map.terr[c].neighbors.some(n => state.rich[n])) continue; // zones séparées
+      const group = [c].concat(map.terr[c].neighbors.filter(n => !state.rich[n]).sort(() => srand(state) - 0.5).slice(0, 1 + Math.floor(srand(state) * 2)));
+      for (const g of group) { state.rich[g] = 1; state.territories[g].troops += 3; }
+      z++;
+    }
     // Capitales le plus éloignées possible les unes des autres
     const caps = [];
     const dists = [];
@@ -395,10 +413,8 @@
     let inc = CFG.BASE_INCOME;
     state.territories.forEach((t, i) => {
       if (t.owner !== pi) return;
-      inc += map.terr[i].income + TERRAIN[map.terr[i].terrain].income;
-      inc += 2 * countOf(t, 'mine');
+      inc += terrIncome(state, map, i);
     });
-    if (state.players[pi].capital != null && state.territories[state.players[pi].capital].owner === pi) inc += CFG.CAPITAL_BONUS;
     return inc;
   }
 
@@ -673,6 +689,8 @@
     const marginOf = (def) => (def >= 30 ? Math.min(margin, 1.12) : margin);
     const mine = [];
     T.forEach((t, i) => { if (t.owner === pi) mine.push(i); });
+    // or de base d'une case (hors terrain et mines) : revenu propre + capitale + zone riche
+    const baseInc = (i) => map.terr[i].income + ((state.capitals || []).includes(i) ? CFG.CAPITAL_BONUS : 0) + (state.rich && state.rich[i] ? CFG.RICH_BONUS : 0);
     if (!mine.length) return;
     if (!p.atk) p.atk = { lead: 0, other: 0 }; // compteur d'attaques contre le premier / contre les autres joueurs
     // Comme un humain qui clique : un nombre limité d'actions (envoi, achat, construction) à chaque réflexion
@@ -758,7 +776,7 @@
     const spare = (i) => T[i].troops - 1 - keepOf(i); // soldats disponibles pour attaquer ou renforcer ailleurs
     if (level !== 'easy') {
       // valeur d'un territoire : capitale, ville, montagne, revenu
-      const value = (i) => (p.capital === i ? 20 : 0) + map.terr[i].income * 2 + TERRAIN[map.terr[i].terrain].income * 3 + (map.terr[i].terrain === 'mountain' ? 3 : 0);
+      const value = (i) => (p.capital === i ? 20 : 0) + baseInc(i) * 2 + TERRAIN[map.terr[i].terrain].income * 3 + (map.terr[i].terrain === 'mountain' ? 3 : 0);
       const attacked = mine.filter(i => hostile[i] > 0)
         .map(i => ({ i, deficit: Math.ceil(hostile[i] * 1.15 / defenseOf(state, map, i)) + 1 - T[i].troops }))
         .filter(x => x.deficit > 0)
@@ -784,7 +802,10 @@
     const used = new Set();
     let attacks = 0;
     // on garde toujours une action pour acheter quand il y a de l'or en caisse (sinon l'or s'accumule sans servir)
-    const maxAttacks = Math.max(0, Math.min(level === 'hard' ? 3 : level === 'easy' ? 1 : 2, budget - (p.gold >= 30 ? 1 : 0)));
+    // (avec une seule action, le bot facile alterne : un tour il achète, le suivant il attaque)
+    p.flip = !p.flip;
+    const keepBuy = p.gold >= 30 && (budget > 1 || p.flip) ? 1 : 0;
+    const maxAttacks = Math.max(0, Math.min(level === 'hard' ? 3 : level === 'easy' ? 1 : 2, budget - keepBuy));
     let strike = null; // frappe sur le premier en préparation (on accumule des troupes à `from`)
 
     // 1. Frappes sur le premier (bots normaux et difficiles qui ne sont pas premiers)
@@ -805,7 +826,7 @@
         for (const i of mine) if (src < 0 || dt[i] < dt[src] || (dt[i] === dt[src] && T[i].troops > T[src].troops)) src = i;
         const c = costOf(src, tg);
         if (!c || c.need <= 0) continue;
-        let score = -c.need - dt[src] * 3 + map.terr[tg].income * 2;
+        let score = -c.need - dt[src] * 3 + baseInc(tg) * 2;
         if (state.players[first].capital === tg) score += 15 + state.players[first].gold / 50;
         cands.push({ from: src, to: tg, need: c.need, score });
       }
@@ -828,7 +849,7 @@
         if (T[n].owner === pi) continue;
         const def = T[n].troops, o = T[n].owner;
         const need = Math.ceil(def * defenseOf(state, map, n) * marginOf(def)) + 2 - (incoming[n] || 0);
-        let score = map.terr[n].income * 3 + TERRAIN[map.terr[n].terrain].income * 2 - def * 0.25;
+        let score = baseInc(n) * 3 + TERRAIN[map.terr[n].terrain].income * 2 - def * 0.25;
         if (level === 'easy') score += o === -1 ? 1 : 0;
         else if (o === -1) score += neutralsLeft > T.length * 0.3 ? 2 : 0;
         else if (iLead) score += 3 * (1 - power[o] / Math.max(1, power[pi])); // premier : achever les plus faibles
@@ -867,7 +888,7 @@
         if (focus && o >= 0 && o !== first && !nearlyOut(o) && leadShare(0, 1) < QUOTA) continue;
         const c = costOf(src, tg);
         if (!c || c.need <= 0 || c.need > spare(src)) continue;
-        let score = map.terr[tg].income * 3 + TERRAIN[map.terr[tg].terrain].income * 2 - c.need * 0.05 - d[tg] * 2;
+        let score = baseInc(tg) * 3 + TERRAIN[map.terr[tg].terrain].income * 2 - c.need * 0.05 - d[tg] * 2;
         if (o >= 0 && o === first && !iLead) score += 6;
         if (o >= 0 && state.players[o].capital === tg) score += 6 + state.players[o].gold / 100;
         if (!best || score > best.score) best = { tg, c, score };
@@ -906,7 +927,7 @@
         let enemy = 0;
         for (const n of map.terr[i].neighbors) if (T[n].owner >= 0 && T[n].owner !== pi) enemy = Math.max(enemy, T[n].troops);
         const isCap = p.capital === i, front = frontier.includes(i);
-        const val = (isCap ? 6 : 0) + map.terr[i].income + TERRAIN[map.terr[i].terrain].income * 2 + (map.terr[i].terrain === 'mountain' ? 2 : 0);
+        const val = (isCap ? 6 : 0) + baseInc(i) + TERRAIN[map.terr[i].terrain].income * 2 + (map.terr[i].terrain === 'mountain' ? 2 : 0);
         for (const kind of Object.keys(BUILDINGS)) {
           if (countOf(T[i], kind) >= maxBuildings(state, i, kind)) continue;
           let score = 0;
@@ -996,5 +1017,5 @@
     }
   }
 
-  return { CFG, COLORS, TERRAIN, BUILDINGS, SIZES, MAP_LIST, territoryCount, buildCost, maxBuildings, countOf, resolveOpts, generateMap, createGame, applyAction, step, incomeOf, defenseOf, travelTime, isSea, findPath, legPos, crossingPoint };
+  return { CFG, COLORS, TERRAIN, BUILDINGS, SIZES, MAP_LIST, territoryCount, buildCost, maxBuildings, countOf, terrIncome, resolveOpts, generateMap, createGame, applyAction, step, incomeOf, defenseOf, travelTime, isSea, findPath, legPos, crossingPoint };
 });

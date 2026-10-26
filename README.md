@@ -42,7 +42,8 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
   | Monde | 47 / 79 / 116 | pays (petits voisins regroupés, grands découpés : Sibérie, Alaska, Québec…) |
 
   Les îles sont reliées par des passages maritimes en pointillés ; les pays voisins hors jeu sont en gris.
-- **Revenu** : versé toutes les **4 s** (rythme posé, pour laisser le temps de réfléchir à la stratégie) : 5 or de base pour chaque joueur, + 1 à 3 par territoire, + 3 pour la capitale (★).
+- **Revenu** : versé toutes les **4 s** (rythme posé, pour laisser le temps de réfléchir à la stratégie) : 5 or de base pour chaque joueur, + 1 à 3 par territoire, + 5 pour chaque case de capitale (★) tenue (la sienne ou celle prise à un adversaire),
+  + 2 par territoire de **zone riche** (petits groupes de 2-3 territoires entourés de pointillés dorés, revenu affiché en or, un peu mieux gardés au départ).
 - Un soldat coûte **4 or** et apparaît sur le territoire choisi.
 - **Terrains** :
 
@@ -56,7 +57,7 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
 - **Bâtiments** (test, désactivables) : Fort 30 or (+50 % de défense chacun), Mine 30 or (+2 or par versement),
   Caserne 45 or (+1 soldat toutes les 3 s). Sur la carte, chaque territoire montre ses bâtiments, pour tous les joueurs :
   badge gris (F = fort), jaune (M = mine), rouge (C = caserne), avec le nombre s'il y en a plusieurs. Chaque achat rend **le même type** 20 % plus cher (les autres types ne bougent pas).
-  Un territoire peut avoir 1 bâtiment de chaque type ; une **capitale** (★) jusqu'à 3 de chaque, mais 2 forts au plus.
+  Un territoire peut avoir 2 mines et 2 casernes, mais 1 seul fort ; une **capitale** (★) jusqu'à 4 mines et 4 casernes, et 2 forts.
   Les bâtiments restent en place si le territoire change de main.
 - **Envoi de troupes** : depuis un de tes territoires vers n'importe quel territoire. Il reste toujours 1 soldat sur place.
   Le trajet passe de préférence par tes territoires ; un territoire neutre ou ennemi sur le chemin est attaqué :

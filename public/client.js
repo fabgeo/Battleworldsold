@@ -298,6 +298,12 @@
     b.strokeStyle = 'rgba(40,30,20,0.35)'; b.lineWidth = 1.2; b.stroke(thin);
     b.strokeStyle = 'rgba(15,30,50,0.8)'; b.lineWidth = 2; b.stroke(coast);
     b.strokeStyle = 'rgba(25,20,15,0.85)'; b.lineWidth = 3; b.stroke(thick);
+    // Zones riches : contour doré en pointillés
+    if (st.rich) {
+      const rich = new Path2D();
+      for (const [x1, y1, x2, y2, a, c] of m.segments) if (!!st.rich[a] !== (c >= 0 && !!st.rich[c])) { rich.moveTo(x1 * S, y1 * S); rich.lineTo(x2 * S, y2 * S); }
+      b.setLineDash([7, 5]); b.strokeStyle = '#ffd84a'; b.lineWidth = 3; b.stroke(rich); b.setLineDash([]);
+    }
     // Passages maritimes
     b.strokeStyle = 'rgba(220,235,255,0.55)'; b.lineWidth = 2; b.setLineDash([6, 6]);
     for (const [a, c] of m.seaLinks) {
@@ -803,8 +809,13 @@
       ctx.fillText(txt, x, y + 1);
       const caps = st.capitals || st.players.map(pl => pl.capital);
       if (caps.includes(i)) drawStar(x, y - r - R * 0.35, R * 0.62);
-      ctx.font = font(R * 0.75, 700); ctx.fillStyle = 'rgba(30,25,15,0.85)';
-      const inc = T.income + E.TERRAIN[T.terrain].income + 2 * E.countOf(t, 'mine');
+      ctx.font = font(R * 0.75, 700);
+      const inc = E.terrIncome(st, m, i);
+      if (st.rich && st.rich[i]) { // zone riche : revenu en or sur fond sombre
+        const w = ctx.measureText('+' + inc).width + R * 0.5;
+        ctx.fillStyle = 'rgba(40,30,10,0.85)'; ctx.fillRect(x - w / 2, y + r + R * 0.12, w, R * 0.86);
+        ctx.fillStyle = '#ffd84a';
+      } else ctx.fillStyle = 'rgba(30,25,15,0.85)';
       ctx.fillText('+' + inc, x, y + r + R * 0.55);
       // un badge par type de bâtiment (avec le nombre s'il y en a plusieurs), empilés à droite de l'étiquette
       // couleur par type : Fort gris pierre, Mine or, Caserne rouge (visible pour tous les joueurs)
@@ -863,8 +874,8 @@
   function territoryInfo(i) {
     const st = G.state, m = G.map, t = st.territories[i], T = m.terr[i];
     const owner = t.owner >= 0 ? st.players[t.owner].name : 'Neutre';
-    const ter = E.TERRAIN[T.terrain].name;
-    const inc = T.income + E.TERRAIN[T.terrain].income + 2 * E.countOf(t, 'mine');
+    const inc = E.terrIncome(st, m, i);
+    const ter = E.TERRAIN[T.terrain].name + (st.rich && st.rich[i] ? ' · zone riche' : '') + (st.capitals && st.capitals.includes(i) ? ' · capitale' : '');
     const bld = t.buildings.length ? ' · ' + Object.keys(E.BUILDINGS).filter(k => t.buildings.includes(k))
       .map(k => E.BUILDINGS[k].name + (E.countOf(t, k) > 1 ? ' ×' + E.countOf(t, k) : '')).join(', ') : '';
     if (t.owner === G.me) return `${ter}${bld} · ${t.troops} soldats · +${inc} or`;
