@@ -6,7 +6,7 @@
   'use strict';
 
   const CFG = {
-    SOLDIER_COST: 5,
+    SOLDIER_COST: 4,
     BASE_INCOME: 5,        // or/s pour chaque joueur, quoi qu'il possède
     CAPITAL_BONUS: 3,      // or/s en plus pour la capitale
     START_GOLD: 25,
@@ -522,6 +522,7 @@
       if (prev >= 0) {
         const pp = state.players[prev];
         pp.stats.lost++;
+        pp.lastHitBy = a.owner; // pour lui donner l'or restant si ce joueur est éliminé
         // Capitale prise : le vaincu perd la moitié de son or, le vainqueur la récupère
         if (pp.capital === a.to) {
           const half = Math.floor(pp.gold / 2);
@@ -601,7 +602,12 @@
     for (const a of state.armies) has[a.owner] = true;
     state.players.forEach((p, i) => {
       if (counts[i] > p.stats.peakTerr) p.stats.peakTerr = counts[i];
-      if (p.alive && !has[i]) { p.alive = false; p.gold = 0; p.stats.outAt = Math.round(state.time); }
+      if (p.alive && !has[i]) {
+        // éliminé : celui qui lui a pris son dernier territoire récupère tout son or restant
+        const killer = p.lastHitBy != null ? state.players[p.lastHitBy] : null;
+        if (killer && killer.alive && p.lastHitBy !== i) { killer.gold += p.gold; p.stats.goldLostAtEnd = Math.round(p.gold); }
+        p.alive = false; p.gold = 0; p.stats.outAt = Math.round(state.time);
+      }
     });
     const alive = state.players.map((p, i) => (p.alive ? i : -1)).filter(i => i >= 0);
     if (alive.length <= 1 && state.players.length > 1) {
@@ -696,9 +702,19 @@
       for (const v of [a.to].concat(a.path || [])) if (T[v].owner === pi) { hostile[v] += a.n; break; }
     }
     // Soldats à garder sur place quand une attaque arrive (le terrain et les forts comptent dans la défense)
+    // Garnison permanente de la capitale : grossit avec le temps et face à un voisin fort
+    const capitalGarrison = () => {
+      const c = p.capital;
+      if (level === 'easy' || c == null || T[c].owner !== pi) return 0;
+      let enemy = 0;
+      for (const n of map.terr[c].neighbors) if (T[n].owner >= 0 && T[n].owner !== pi) enemy = Math.max(enemy, T[n].troops);
+      return Math.min(40, Math.max(Math.ceil(6 + state.time / 40), Math.ceil(enemy * 1.1 / defenseOf(state, map, c))));
+    };
+    const garrison = capitalGarrison();
     const keepOf = (i) => {
-      if (level === 'easy' || !hostile[i]) return 0;
-      return Math.ceil(hostile[i] * 1.15 / defenseOf(state, map, i));
+      if (level === 'easy') return 0;
+      const vsAttack = hostile[i] ? Math.ceil(hostile[i] * 1.15 / defenseOf(state, map, i)) : 0;
+      return i === p.capital ? Math.max(vsAttack, garrison) : vsAttack;
     };
     const spare = (i) => T[i].troops - 1 - keepOf(i); // soldats disponibles pour attaquer ou renforcer ailleurs
     if (level !== 'easy') {
@@ -708,6 +724,10 @@
         .map(i => ({ i, deficit: Math.ceil(hostile[i] * 1.15 / defenseOf(state, map, i)) + 1 - T[i].troops }))
         .filter(x => x.deficit > 0)
         .sort((x, y) => value(y.i) - value(x.i));
+      // capitale sous sa garnison (sans attaque en cours) : on la regarnit aussi, après les urgences
+      if (garrison && p.capital != null && !attacked.some(x => x.i === p.capital) && T[p.capital].troops < garrison * 0.8) {
+        attacked.push({ i: p.capital, deficit: garrison - T[p.capital].troops });
+      }
       for (const { i, deficit } of attacked) {
         let need = deficit;
         // 1. acheter des défenseurs sur place
@@ -798,9 +818,19 @@
     // limites : forts selon la taille de l'empire, et un nombre total de bâtiments raisonnable
     let myForts = 0, myBuildings = 0;
     for (const i of mine) { myForts += countOf(T[i], 'fort'); myBuildings += T[i].buildings.length; }
-    const fortCap = Math.max(1, Math.floor(mine.length / 6)), buildCap = 2 + Math.ceil(mine.length * 0.6);
+    const fortCap = Math.max(1, Math.floor(mine.length / 6)), buildCap = 1 + Math.floor(mine.length * 0.5);
     const late = state.time > 900; // après 15 min, on n'épargne plus pour bâtir (sauf casernes)
-    if (state.opts.buildings && !underAttack && myBuildings < buildCap) {
+    // Or « en trop » = ce qui reste une fois le front et la capitale correctement défendus
+    let defenseGold = 0;
+    for (const i of frontier) {
+      let enemy = 0;
+      for (const n of map.terr[i].neighbors) if (T[n].owner >= 0 && T[n].owner !== pi) enemy = Math.max(enemy, T[n].troops);
+      const want = (p.capital === i ? 1.3 : 0.8) * enemy; // la capitale doit tenir face au plus gros voisin
+      defenseGold += Math.max(0, Math.ceil(want / defenseOf(state, map, i)) - T[i].troops) * CFG.SOLDIER_COST;
+    }
+    const firstBuild = { easy: 200, normal: 150, hard: 120 }[level] || 150; // pas de bâtiment en tout début de partie
+    const canInvest = state.time >= firstBuild && state.time - (p.lastBuild || -99) >= 45;
+    if (state.opts.buildings && !underAttack && canInvest && myBuildings < buildCap) {
       const nearFront = new Set(frontier);
       for (const f of frontier) for (const n of map.terr[f].neighbors) if (T[n].owner === pi) nearFront.add(n);
       const early = Math.max(0, 1 - state.time / 900); // les mines rapportent plus si on les construit tôt
@@ -825,10 +855,10 @@
       }
       // construire si l'or en trop suffit (une petite réserve reste pour les soldats)
       const reserve = { easy: 25, normal: 15, hard: 10 }[level] || 15;
-      if (plan && p.gold >= plan.cost + reserve && doAct({ type: 'build', t: plan.t, kind: plan.kind })) plan = null;
+      if (plan && p.gold >= plan.cost + reserve + defenseGold && doAct({ type: 'build', t: plan.t, kind: plan.kind })) { plan = null; p.lastBuild = state.time; }
     }
     // or réservé au bâtiment visé quand rien ne presse (pas de frappe en préparation)
-    const saving = plan && !strike && !late ? plan.cost : 0;
+    const saving = plan && !strike && !late && defenseGold === 0 ? plan.cost : 0;
 
     // 4. Achats : défense si menace grave, sinon préparer la frappe sur le premier, sinon l'attaque la plus rentable
     const affordable = Math.floor(p.gold / CFG.SOLDIER_COST);

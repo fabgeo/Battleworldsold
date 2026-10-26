@@ -36,7 +36,7 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
 
   Les îles sont reliées par des passages maritimes en pointillés ; les pays voisins hors jeu sont en gris.
 - **Revenu** : versé toutes les **4 s** (rythme posé, pour laisser le temps de réfléchir à la stratégie) : 5 or de base pour chaque joueur, + 1 à 3 par territoire, + 3 pour la capitale (★).
-- Un soldat coûte **5 or** et apparaît sur le territoire choisi.
+- Un soldat coûte **4 or** et apparaît sur le territoire choisi.
 - **Terrains** :
 
   | Terrain | Défense | Vitesse | Revenu |
@@ -59,7 +59,7 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
 - **Combat** : les défenseurs comptent ×1,2 × terrain × fort, l'attaque a ±15 % d'aléatoire.
 - Chaque **capitale de départ** (joueur et bots) garde une étoile ★ toute la partie.
 - **Capitale prise** : le vaincu perd la moitié de son or, que le vainqueur récupère.
-- Un joueur sans territoire ni armée en marche est éliminé ; le dernier en vie gagne.
+- Un joueur sans territoire ni armée en marche est éliminé : celui qui lui a pris son dernier territoire **récupère tout son or restant**. Le dernier en vie gagne.
   À la fin : statistiques (territoires au fil du temps, captures, soldats achetés, plus grande bataille).
 
 ## Début de partie
@@ -90,7 +90,9 @@ humain ou bot) :
 - **bâtiments** : ils n'achètent qu'avec l'or en trop (jamais au détriment de la défense ou d'une attaque à préparer),
   en épargnant quand rien ne presse : mines à l'arrière (surtout la capitale et en début de partie), casernes près du front
   ou sur leur base de frappe, forts sur un territoire de valeur menacé (capitale, ville, montagne), en nombre limité ;
-  après 15 minutes, ils misent sur l'offensive (casernes seulement) ;
+  jamais dans les premières minutes (2 min 30 en normal), au plus un toutes les 45 s, et seulement une fois
+  le front et la capitale correctement défendus ; après 15 minutes, ils misent sur l'offensive (casernes seulement) ;
+- **capitale** (normal et difficile) : une garnison permanente, qui grossit avec le temps et face à un voisin fort ;
 - un bot qui est lui-même premier cherche à achever ses adversaires. Les bots faciles restent opportunistes.
 
 ## Contrôles
