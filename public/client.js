@@ -20,6 +20,7 @@
     lastSolo: null,
   };
   window.BW = G; // pratique pour déboguer depuis la console
+  if (window.BW_VERSION) { const cr = document.querySelector('.credits'); if (cr) cr.textContent += ' — version ' + window.BW_VERSION; }
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -293,8 +294,8 @@
     const key = st.territories.map(t => t.owner).join(',') + (G.fogKey || '');
     if (key === G.baseKey) return;
     G.baseKey = key;
-    const small = document.createElement('canvas');
-    small.width = m.w; small.height = m.h;
+    const small = G.small || (G.small = document.createElement('canvas')); // réutilisée (mémoire limitée sur iPhone)
+    if (small.width !== m.w || small.height !== m.h) { small.width = m.w; small.height = m.h; }
     const sctx = small.getContext('2d');
     const img = sctx.createImageData(m.w, m.h);
     const cols = m.terr.map((_, i) => terrColor(i, st.territories[i].owner));
@@ -314,14 +315,14 @@
     b.imageSmoothingEnabled = false;
     b.drawImage(small, 0, 0, m.w * S, m.h * S);
     // vagues : fines hachures en diagonale sur la mer
-    if (G.seaPath) {
+    if (G.seaPath) try {
       b.save(); b.clip(G.seaPath);
       b.strokeStyle = 'rgba(200,225,245,0.07)'; b.lineWidth = 1;
       b.beginPath();
       for (let x = -m.h * S; x < m.w * S; x += 14) { b.moveTo(x, 0); b.lineTo(x + m.h * S, m.h * S); }
       b.stroke(); b.restore();
-    }
-    drawTerrainGlyphs(b);
+    } catch (e) { b.restore(); reportError(e); }
+    try { drawTerrainGlyphs(b); } catch (e) { reportError(e); }
     // Frontières : fines entre territoires, épaisses entre propriétaires, côtes
     const thin = new Path2D(), thick = new Path2D(), coast = new Path2D();
     for (const [x1, y1, x2, y2, a, c] of m.segments) {
@@ -345,29 +346,24 @@
     b.strokeStyle = 'rgba(15,19,24,0.9)'; b.lineWidth = 1.5; b.strokeRect(7, 7, m.w * S - 14, m.h * S - 14);
   }
 
-  // Fond autour de la carte : bleu nuit, méridiens discrets, vignette (mis en cache à chaque redimensionnement)
+  // Fond autour de la carte : bleu nuit, méridiens discrets, vignette. Dessiné directement à chaque image
+  // (pas de toile supplémentaire : Safari sur iPhone limite fortement la mémoire des toiles)
   function drawBackdrop() {
-    if (!canvas.width || !canvas.height) return; // zone de jeu cachée (menu) : rien à dessiner
-    if (!G.backdrop || G.backdrop.width !== canvas.width || G.backdrop.height !== canvas.height) {
-      const c = G.backdrop = document.createElement('canvas');
-      c.width = canvas.width; c.height = canvas.height;
-      const x = c.getContext('2d');
-      x.fillStyle = '#0f1419'; x.fillRect(0, 0, c.width, c.height);
-      x.strokeStyle = 'rgba(201,162,74,0.06)'; x.lineWidth = 1;
-      const step = 56 * DPR;
-      x.beginPath();
-      for (let i = step / 2; i < c.width; i += step) { x.moveTo(i, 0); x.lineTo(i, c.height); }
-      for (let j = step / 2; j < c.height; j += step) { x.moveTo(0, j); x.lineTo(c.width, j); }
-      x.stroke();
-      const g = x.createRadialGradient(c.width / 2, c.height / 2, Math.min(c.width, c.height) * 0.2, c.width / 2, c.height / 2, Math.max(c.width, c.height) * 0.75);
-      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.55)');
-      x.fillStyle = g; x.fillRect(0, 0, c.width, c.height);
-    }
-    ctx.drawImage(G.backdrop, 0, 0);
+    const w = canvas.width, h = canvas.height;
+    if (!w || !h) return; // zone de jeu cachée (menu) : rien à dessiner
+    ctx.fillStyle = '#0f1419'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(201,162,74,0.06)'; ctx.lineWidth = 1;
+    const step = 56 * DPR;
+    ctx.beginPath();
+    for (let i = step / 2; i < w; i += step) { ctx.moveTo(i, 0); ctx.lineTo(i, h); }
+    for (let j = step / 2; j < h; j += step) { ctx.moveTo(0, j); ctx.lineTo(w, j); }
+    ctx.stroke();
   }
 
   // ---------- Vue ----------
   let DPR = 1;
+  // Résolution : au plus 2x (un iPhone est en 3x : ça triplerait la mémoire pour un gain invisible)
+  const dpr = () => Math.min(2, window.devicePixelRatio || 1);
   // Marges (px CSS) laissées libres par les barres autour de la carte
   let inset = { t: 50, b: 84, l: 0, r: 0 };
   function measureInsets() {
@@ -379,7 +375,7 @@
   }
   function resize() {
     if (!canvas.clientWidth || !canvas.clientHeight) return; // écran de jeu caché (menu) : on garde la taille actuelle
-    DPR = window.devicePixelRatio || 1;
+    DPR = dpr();
     canvas.width = Math.round(canvas.clientWidth * DPR);
     canvas.height = Math.round(canvas.clientHeight * DPR);
     measureInsets();
@@ -1175,19 +1171,31 @@
 
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
+  // Erreur d'affichage : visible en bas de l'écran (une fois toutes les 5 s) pour pouvoir la signaler
+  function reportError(err) {
+    const now = performance.now();
+    if (G.lastErr && now - G.lastErr < 5000) return;
+    G.lastErr = now;
+    console.error(err);
+    let box = document.getElementById('errBox');
+    if (!box) { box = document.createElement('div'); box.id = 'errBox'; document.body.appendChild(box); box.onclick = () => box.remove(); }
+    const where = String(err && err.stack || '').split('\n').find(l => /client|battleworlds|index|\.js|html/.test(l)) || '';
+    box.textContent = 'Erreur d\'affichage : ' + (err && err.message || err) + (where ? ' — ' + where.trim().slice(0, 120) : '') + ' (touche pour fermer)';
+  }
+
   // ---------- Boucle ----------
   let last = performance.now(), uiAcc = 0;
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     // une erreur (de dessin, d'un navigateur particulier…) ne doit jamais arrêter la boucle du jeu
-    try { frameBody(dt); } catch (err) { if (!G.lastErr || now - G.lastErr > 5000) { G.lastErr = now; console.error(err); } }
+    try { frameBody(dt); } catch (err) { reportError(err); }
     requestAnimationFrame(frame);
   }
   function frameBody(dt) {
     if (G.mode === 'solo' && G.state && !G.paused && !G.choosing) E.step(G.state, G.map, dt);
     // filet de sécurité : si la taille affichée a changé (rotation), on redimensionne
-    if (G.map && (Math.round(canvas.clientWidth * (window.devicePixelRatio || 1)) !== canvas.width || Math.round(canvas.clientHeight * (window.devicePixelRatio || 1)) !== canvas.height)) resize();
+    if (G.map && (Math.round(canvas.clientWidth * dpr()) !== canvas.width || Math.round(canvas.clientHeight * dpr()) !== canvas.height)) resize();
     draw();
     uiAcc += dt;
     if (uiAcc > 0.1) { uiAcc = 0; updateUI(); }

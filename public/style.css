@@ -227,3 +227,5 @@ input, select { background: var(--panel-2); border-color: var(--line-2); }
 /* bouton Auto : sur un téléphone étroit en portrait, on masque +1 pour garder une seule ligne */
 @media (max-width: 430px) { #bottombar [data-buy="1"] { display: none; } }
 @media (max-width: 430px) { #game.immersive #bottombar { gap: 6px; } #game.immersive #bottombar button { min-width: 30px; padding: 0 3px; font-size: 13px; } }
+
+#errBox { position: fixed; left: 8px; right: 8px; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); z-index: 50; background: #3a1414; color: #ffd9d4; border: 1px solid #d65745; border-radius: 8px; padding: 8px 10px; font: 12px/1.35 ui-monospace, Menlo, monospace; }

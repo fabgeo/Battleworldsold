@@ -12,11 +12,14 @@ const body = read('public/index.html').match(/<body>([\s\S]*)<\/body>/)[1]
   .replace('<div id="multiBlock">', NOTE)
   .replace(/<script src="[^"]*"><\/script>\s*/g, '');
 
+// numéro de version affiché en bas du menu (pour vérifier qu'on a bien la dernière version)
+const VERSION = new Date().toISOString().slice(0, 16).replace('T', ' ');
 const content = `<style>
 :root { color-scheme: dark; }
 ${read('public/style.css')}</style>
 ${body}
 <script>
+window.BW_VERSION = '${VERSION}';
 ${read('shared/europe-map.js')}
 ${read('shared/maps-extra.js')}
 ${read('shared/engine.js')}
