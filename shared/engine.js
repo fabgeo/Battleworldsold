@@ -18,6 +18,7 @@
     FREE_LEGS: 2,
     INCOME_EVERY: 4,       // secondes entre deux versements d'or (lent : laisse le temps de réfléchir)
     SEA_SLOW: 2,           // un passage maritime est 2 fois plus lent
+    OWN_TERRAIN_SLOW: 0.4, // sur ses territoires, le ralentissement du terrain est réduit à 40 % (montagne : 0,8 au lieu de 0,5)
     BARRACKS_EVERY: 3,     // secondes entre deux soldats produits par une caserne
     HISTORY_EVERY: 5,      // secondes entre deux points des statistiques
     BOT_THINK: { easy: 2.6, normal: 2.1, hard: 0.9 },
@@ -35,9 +36,9 @@
     mine: { name: 'Mine', cost: 30, desc: '+2 or par versement', letter: 'M' },
     barracks: { name: 'Caserne', cost: 45, desc: '+1 soldat / 3 s', letter: 'C' },
   };
-  const BUILD_STEP = 0.2; // chaque bâtiment d'un type acheté rend le suivant du même type 20 % plus cher
+  const BUILD_STEP = 0.15; // chaque bâtiment d'un type acheté rend le suivant du même type 15 % plus cher
 
-  // Prix d'un bâtiment pour un joueur : +20 % par bâtiment de ce type déjà acheté (les autres types ne bougent pas)
+  // Prix d'un bâtiment pour un joueur : +15 % par bâtiment de ce type déjà acheté (les autres types ne bougent pas)
   function buildCost(state, pi, kind) {
     const p = state.players[pi];
     const n = p && p.stats.builtKind ? p.stats.builtKind[kind] || 0 : 0;
@@ -66,8 +67,8 @@
     return o;
   }
 
-  // Régions à bonus (comme au Risk) : continents, régions… données par la carte ; sur la carte aléatoire,
-  // groupes de territoires voisins. Plus une région est grande et a de points d'entrée à défendre, plus elle rapporte.
+  // Régions à bonus (comme au Risk) : continents, régions… données par la carte.
+  // Plus une région est grande et a de points d'entrée à défendre, plus elle rapporte.
   const EUROPE_ZONES = {
     'Scandinavie': ['Norvège', 'Suède', 'Finlande', 'Danemark'], 'Îles Britanniques': ['Royaume-Uni', 'Irlande'],
     'Pays baltes': ['Estonie', 'Lettonie', 'Lituanie', 'Biélorussie'], 'Russie': ['Russie'], 'Ukraine et Moldavie': ['Ukraine', 'Moldavie'],
@@ -78,27 +79,13 @@
   const COUNTRY_ZONE = {};
   for (const [z, list] of Object.entries(EUROPE_ZONES)) for (const c of list) COUNTRY_ZONE[c] = z;
   function buildZones(terr, defs) {
-    const n = terr.length;
-    let key = defs.map(d => d.zone || COUNTRY_ZONE[d.country] || null);
-    if (key.some(k => k == null)) {
-      // carte aléatoire : graines éloignées les unes des autres, chaque territoire rejoint la plus proche
-      const k = Math.max(3, Math.round(n / 6));
-      const dist = (from) => { const d = new Array(n).fill(Infinity), q = [from]; d[from] = 0; for (let j = 0; j < q.length; j++) for (const v of terr[q[j]].neighbors) if (d[v] === Infinity) { d[v] = d[q[j]] + 1; q.push(v); } return d; };
-      const seeds = [0], dd = [dist(0)];
-      while (seeds.length < k) {
-        let best = -1, bd = 0;
-        for (let i = 0; i < n; i++) { const m = Math.min(...dd.map(d => d[i])); if (m > bd && m !== Infinity) { bd = m; best = i; } }
-        if (best < 0) break;
-        seeds.push(best); dd.push(dist(best));
-      }
-      key = terr.map((t, i) => { let b = 0; dd.forEach((d, j) => { if (d[i] < dd[b][i]) b = j; }); return 'Région de ' + terr[seeds[b]].name; });
-    }
+    const key = defs.map(d => d.zone || COUNTRY_ZONE[d.country] || 'Autres terres');
     const names = [...new Set(key)];
     const zoneOf = key.map(k => names.indexOf(k));
     // une région d'un seul territoire rejoint sa plus petite voisine
     for (;;) {
       const size = names.map((_, z) => zoneOf.filter(v => v === z).length);
-      const lone = zoneOf.findIndex(z => size[z] === 1);
+      const lone = zoneOf.findIndex((z, i) => size[z] === 1 && !defs[i].zoneBonus);
       if (lone < 0) break;
       const cands = terr[lone].neighbors.map(v => zoneOf[v]).filter(z => z !== zoneOf[lone]);
       if (!cands.length) break;
@@ -110,15 +97,16 @@
       if (!list.length) return;
       const entries = list.filter(i => terr[i].neighbors.some(v => zoneOf[v] !== z)).length;
       for (const i of list) terr[i].zone = zones.length;
-      zones.push({ name, terr: list, entries, bonus: Math.max(1, Math.round((list.length + 1.5 * entries) / 3)) });
+      const fixed = Math.max(0, ...list.map(i => defs[i].zoneBonus || 0)); // bonus imposé par la carte (île du Cercle)
+      zones.push({ name, terr: list, entries, bonus: fixed || Math.max(1, Math.round((list.length + 1.5 * entries) / 3)) });
     });
     return zones;
   }
 
-  const SIZES = { small: 25, medium: 40, large: 60 }; // territoires de la carte aléatoire
+  const SIZES = { small: 25, medium: 40, large: 60 }; // ordre de grandeur du nombre de territoires par taille
   const MAP_LIST = [
     { id: 'random', name: 'Aléatoire' }, { id: 'europe', name: 'Europe' }, { id: 'france', name: 'France' },
-    { id: 'italy', name: 'Italie' }, { id: 'med', name: 'Méditerranée' }, { id: 'world', name: 'Monde' },
+    { id: 'italy', name: 'Italie' }, { id: 'med', name: 'Méditerranée' }, { id: 'world', name: 'Monde' }, { id: 'circle', name: 'Cercle' },
   ];
   const COLORS = ['#e6194b', '#3c7dd9', '#3cb44b', '#f58231', '#911eb4', '#16b5b5', '#d6c400', '#f032e6'];
 
@@ -183,89 +171,106 @@
     };
   }
 
+  // Carte jouée : celle choisie, ou une des cartes au hasard (« Aléatoire »), tirée d'après la graine
+  // (identique pour tous les joueurs d'une partie en ligne)
+  function mapIdOf(seed, id) {
+    if (MAP_LIST.some(m => m.id === id && m.id !== 'random')) return id;
+    const real = MAP_LIST.filter(m => m.id !== 'random');
+    return real[Math.floor(mulberry(seed ^ 0x2545f491)() * real.length)].id;
+  }
   function generateMap(seed, opts) {
     opts = opts || {};
-    const data = mapData(opts.map, opts.sizeKey);
-    if (data) return dataMap(seed, data);
-    const N = opts.size || 45;
-    const H = Math.round(Math.sqrt(N * 355 / 1.6)), W = Math.round(H * 1.6);
-    const r = mulberry(seed);
+    const id = mapIdOf(seed, opts.map);
+    const map = id === 'circle' ? circleMap(seed, opts.sizeKey) : dataMap(seed, mapData(id, opts.sizeKey));
+    map.id = id;
+    map.name = MAP_LIST.find(m => m.id === id).name;
+    return map;
+  }
 
-    // Germes espacés (échantillonnage par rejet)
-    const minD = Math.sqrt((W * H) / N) * 0.75;
-    const seeds = [];
-    let tries = 0;
-    while (seeds.length < N && tries < 20000) {
-      tries++;
-      const x = 2 + r() * (W - 4), y = 2 + r() * (H - 4);
-      let ok = true;
-      for (const s of seeds) if ((s.x - x) ** 2 + (s.y - y) ** 2 < minD * minD) { ok = false; break; }
-      if (ok) seeds.push({ x, y });
-    }
-
-    // Voronoï avec déformation du domaine pour des frontières organiques
-    const nx1 = valueNoise(r, W, H, 14), ny1 = valueNoise(r, W, H, 14);
-    const nx2 = valueNoise(r, W, H, 5), ny2 = valueNoise(r, W, H, 5);
-    const cells = new Int16Array(W * H);
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        const wx = x + nx1(x, y) * 6 + nx2(x, y) * 2;
-        const wy = y + ny1(x, y) * 6 + ny2(x, y) * 2;
-        let best = 0, bd = Infinity;
-        for (let i = 0; i < seeds.length; i++) {
-          const d = (seeds[i].x - wx) ** 2 + (seeds[i].y - wy) ** 2;
-          if (d < bd) { bd = d; best = i; }
-        }
-        cells[y * W + x] = best;
+  // ---------- Carte « Cercle » ----------
+  // Un anneau de terre entre la mer extérieure et un lac central ; au milieu du lac, une île très riche
+  // reliée à l'anneau par 4 passages (nord, est, sud, ouest). Pas de départ sur l'île.
+  const CIRCLE = {
+    small: { W: 110, layers: [9, 12], island: 1, bonus: 6 },
+    medium: { W: 140, layers: [10, 12, 14], island: 4, bonus: 9 },
+    large: { W: 170, layers: [14, 18, 22], island: 4, bonus: 12 },
+  };
+  function circleMap(seed, sizeKey) {
+    const P = CIRCLE[sizeKey] || CIRCLE.medium;
+    const W = P.W, H = P.W, C = W / 2, r = mulberry(seed);
+    const R0 = 0.27, R1 = 0.52, R2 = 0.95; // île, bord intérieur de l'anneau, côte extérieure (en fraction du rayon)
+    const nx = valueNoise(r, W, H, 12), ny = valueNoise(r, W, H, 12), nc = valueNoise(r, W, H, 9);
+    const L = P.layers.length, offs = P.layers.map(() => r()), base = [];
+    let next = 0;
+    for (const n of P.layers) { base.push(next); next += n; }
+    const islandBase = next;
+    const cells = new Int16Array(W * H).fill(-1);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const wx = x + nx(x, y) * 4, wy = y + ny(x, y) * 4;
+      const dx = (wx - C) / C, dy = (wy - C) / C, rad = Math.hypot(dx, dy), ang = Math.atan2(dy, dx);
+      const coast = nc(x, y) * 0.03;
+      let id = -1;
+      if (rad <= R2 + coast && rad >= R1 + coast) {
+        const l = Math.min(L - 1, Math.floor((rad - R1 - coast) / (R2 - R1) * L));
+        const n = P.layers[l];
+        id = base[l] + (Math.floor(((ang / (2 * Math.PI) + 1 + offs[l]) % 1) * n) % n);
+      } else if (rad <= R0 + coast) {
+        // île : un territoire (petite carte) ou 4 quartiers centrés sur les points cardinaux
+        id = P.island === 1 ? islandBase : islandBase + Math.floor(((ang + Math.PI / 4) / (2 * Math.PI) + 1) * 4) % 4;
       }
+      cells[y * W + x] = id;
     }
-
-    // Nettoyage : chaque territoire garde uniquement sa plus grande composante
-    const T = seeds.length;
-    const seen = new Uint8Array(W * H);
-    const bestComp = new Array(T).fill(null);
-    const comps = [];
+    // chaque territoire garde son plus grand morceau ; les miettes rejoignent un voisin (ou la mer)
+    const T = islandBase + P.island, seen = new Uint8Array(W * H), best = new Array(T).fill(null), comps = [];
+    const nbs = (c) => { const x = c % W; return [x > 0 ? c - 1 : -1, x < W - 1 ? c + 1 : -1, c >= W ? c - W : -1, c + W < W * H ? c + W : -1]; };
     for (let i = 0; i < W * H; i++) {
-      if (seen[i]) continue;
+      if (seen[i] || cells[i] < 0) continue;
       const id = cells[i], comp = [i];
       seen[i] = 1;
-      for (let k = 0; k < comp.length; k++) {
-        const c = comp[k], x = c % W, y = (c / W) | 0;
-        const nb = [x > 0 ? c - 1 : -1, x < W - 1 ? c + 1 : -1, y > 0 ? c - W : -1, y < H - 1 ? c + W : -1];
-        for (const n of nb) if (n >= 0 && !seen[n] && cells[n] === id) { seen[n] = 1; comp.push(n); }
-      }
+      for (let k = 0; k < comp.length; k++) for (const n of nbs(comp[k])) if (n >= 0 && !seen[n] && cells[n] === id) { seen[n] = 1; comp.push(n); }
       comps.push({ id, comp });
-      if (!bestComp[id] || bestComp[id].length < comp.length) bestComp[id] = comp;
+      if (!best[id] || best[id].length < comp.length) best[id] = comp;
     }
-    for (const { id, comp } of comps) if (comp !== bestComp[id]) for (const c of comp) cells[c] = -2;
-    let pending = true;
-    while (pending) {
-      pending = false;
-      const copy = cells.slice();
-      for (let i = 0; i < W * H; i++) {
-        if (copy[i] !== -2) continue;
-        const x = i % W, y = (i / W) | 0;
-        const nb = [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, y > 0 ? i - W : -1, y < H - 1 ? i + W : -1];
-        let v = -2;
-        for (const n of nb) if (n >= 0 && copy[n] !== -2) { v = copy[n]; break; }
-        if (v === -2) pending = true; else cells[i] = v;
-      }
+    for (const { id, comp } of comps) {
+      if (comp === best[id]) continue;
+      let to = -1;
+      for (const c of comp) for (const n of nbs(c)) if (n >= 0 && cells[n] >= 0 && cells[n] !== id) to = cells[n];
+      for (const c of comp) cells[c] = to;
     }
-
-    // Réindexation (territoires vides éventuels supprimés)
     const remap = new Int16Array(T).fill(-1);
     let count = 0;
-    for (let i = 0; i < W * H; i++) if (remap[cells[i]] === -1) remap[cells[i]] = count++;
-    for (let i = 0; i < W * H; i++) cells[i] = remap[cells[i]];
+    for (let i = 0; i < W * H; i++) if (cells[i] >= 0 && remap[cells[i]] === -1) remap[cells[i]] = count++;
+    for (let i = 0; i < W * H; i++) if (cells[i] >= 0) cells[i] = remap[cells[i]];
 
-    const used = new Set();
-    const defs = [];
-    for (let i = 0; i < count; i++) {
-      const v = r();
-      const terrain = v < 0.5 ? 'plain' : v < 0.75 ? 'forest' : v < 0.9 ? 'mountain' : 'city';
-      defs.push({ name: makeName(r, used), income: 1 + Math.floor(r() * 3), terrain });
+    // territoires : terrain, revenu, région (quart de l'anneau ou île)
+    const used = new Set(), defs = new Array(count);
+    const quarter = (ang) => ['Est', 'Sud', 'Ouest', 'Nord'][Math.floor(((ang + Math.PI / 4) / (2 * Math.PI) + 1) * 4) % 4];
+    const sum = new Array(count).fill(0).map(() => [0, 0, 0]);
+    for (let i = 0; i < W * H; i++) if (cells[i] >= 0) { const s = sum[cells[i]]; s[0] += i % W; s[1] += (i / W) | 0; s[2]++; }
+    for (let old = 0; old < T; old++) {
+      const id = remap[old];
+      if (id < 0) continue;
+      const [sx, sy, n] = sum[id], ang = Math.atan2(sy / n - C, sx / n - C);
+      if (old >= islandBase) {
+        defs[id] = { name: P.island === 1 ? 'Île centrale' : 'Île — ' + quarter(ang), income: 3, terrain: 'city', zone: 'Île centrale',
+          zoneBonus: P.bonus, noCapital: true, extraTroops: 8 };
+      } else {
+        const v = r();
+        const terrain = v < 0.5 ? 'plain' : v < 0.75 ? 'forest' : v < 0.9 ? 'mountain' : 'city';
+        const zone = { Nord: 'Terres du Nord', Sud: 'Terres du Sud', Est: "Terres de l'Est", Ouest: "Terres de l'Ouest" }[quarter(ang)];
+        defs[id] = { name: makeName(r, used), income: 1 + Math.floor(r() * 3), terrain, zone };
+      }
     }
-    return buildMap(seed, W, H, cells, defs, []);
+    // 4 passages de l'île vers l'anneau, aux points cardinaux
+    const seaLinks = [];
+    for (const ang of [-Math.PI / 2, 0, Math.PI / 2, Math.PI]) {
+      const at = (rad) => { const x = Math.round(C + Math.cos(ang) * rad * C), y = Math.round(C + Math.sin(ang) * rad * C); return cells[Math.min(H - 1, Math.max(0, y)) * W + Math.min(W - 1, Math.max(0, x))]; };
+      let isl = -1, ring = -1;
+      for (let k = R0; k > 0 && isl < 0; k -= 0.01) isl = at(k);
+      for (let k = R1; k < R2 && ring < 0; k += 0.01) ring = at(k);
+      if (isl >= 0 && ring >= 0 && !seaLinks.some(([a, c]) => a === isl && c === ring)) seaLinks.push([isl, ring]);
+    }
+    return buildMap(seed, W, H, cells, defs, seaLinks);
   }
 
   // Cartes réelles pré-calculées (grille en RLE, -1 = mer, -2 = terre hors jeu)
@@ -273,10 +278,11 @@
     const set = map === 'europe' ? EUROPE : EXTRA && EXTRA[map];
     return set ? set[sizeKey] || set.large : null;
   }
-  // Nombre de territoires d'une carte pour une taille (pour l'affichage des réglages)
+  // Nombre de territoires d'une carte pour une taille (pour l'affichage des réglages ; null : carte tirée au hasard)
   function territoryCount(map, sizeKey) {
+    if (map === 'circle') { const P = CIRCLE[sizeKey] || CIRCLE.medium; return P.layers.reduce((a, n) => a + n, 0) + P.island; }
     const d = mapData(map, sizeKey);
-    return d ? d.regions.length : SIZES[sizeKey];
+    return d ? d.regions.length : null;
   }
   function dataMap(seed, d) {
     const cells = new Int16Array(d.w * d.h);
@@ -288,7 +294,8 @@
   // Construit la carte à partir d'une grille (-1 = mer) et de la liste des territoires
   function buildMap(seed, W, H, cells, defs, seaLinks) {
     const count = defs.length;
-    const terr = defs.map((d, i) => ({ id: i, name: d.name, country: d.country, income: d.income, terrain: d.terrain, size: 0, sx: 0, sy: 0, neighbors: new Set(), sea: [], lx: 0, ly: 0 }));
+    const terr = defs.map((d, i) => ({ id: i, name: d.name, country: d.country, income: d.income, terrain: d.terrain, size: 0, sx: 0, sy: 0, neighbors: new Set(), sea: [], lx: 0, ly: 0,
+      noCapital: !!d.noCapital, extraTroops: d.extraTroops || 0 }));
 
     // Adjacence, segments de frontière (b = -1 : côte), distance au bord
     const segments = [];
@@ -411,20 +418,21 @@
       players: [], armies: [], history: [], bigBattle: null,
     };
     for (let i = 0; i < map.terr.length; i++) {
-      state.territories[i].troops = 2 + map.terr[i].income * 2 + Math.floor(srand(state) * 4);
+      state.territories[i].troops = 2 + map.terr[i].income * 2 + map.terr[i].extraTroops + Math.floor(srand(state) * 4);
     }
-    // Capitales le plus éloignées possible les unes des autres
+    // Capitales le plus éloignées possible les unes des autres (jamais sur un territoire interdit, comme l'île du Cercle)
     const caps = [];
     const dists = [];
+    const allowed = map.terr.filter(t => !t.noCapital).map(t => t.id);
     for (let i = 0; i < players.length; i++) {
       let pick;
       if (i === 0) {
-        pick = Math.floor(srand(state) * map.terr.length);
-        if (start >= 0 && start < map.terr.length) pick = start;
+        pick = allowed[Math.floor(srand(state) * allowed.length)];
+        if (start >= 0 && start < map.terr.length && !map.terr[start].noCapital) pick = start;
       }
       else {
         let best = -1, bs = -1;
-        for (let t = 0; t < map.terr.length; t++) {
+        for (const t of allowed) {
           if (caps.includes(t)) continue;
           let m = Infinity;
           for (const d of dists) m = Math.min(m, d[t]);
@@ -479,20 +487,25 @@
     return map.terr[a].sea.includes(b);
   }
 
+  // Vitesse sur un territoire : chez soi (routes connues), forêt et montagne ralentissent beaucoup moins
+  function speedOn(map, i, state, pi) {
+    const s = TERRAIN[map.terr[i].terrain].speed;
+    return state && state.territories[i].owner === pi ? 1 - (1 - s) * CFG.OWN_TERRAIN_SLOW : s;
+  }
   // Durée d'une étape : moitié du trajet au rythme du terrain de départ, moitié au rythme de l'arrivée,
-  // et 2 fois plus lent par la mer
-  function travelTime(map, a, b) {
+  // et 2 fois plus lent par la mer. Avec state et pi : moins ralenti sur ses propres territoires.
+  function travelTime(map, a, b, state, pi) {
     const A = map.terr[a], B = map.terr[b], P = crossingPoint(map, a, b);
     const d1 = Math.hypot(A.lx - P[0], A.ly - P[1]), d2 = Math.hypot(P[0] - B.lx, P[1] - B.ly);
-    const t = (d1 / TERRAIN[A.terrain].speed + d2 / TERRAIN[B.terrain].speed) / CFG.ARMY_SPEED;
+    const t = (d1 / speedOn(map, a, state, pi) + d2 / speedOn(map, b, state, pi)) / CFG.ARMY_SPEED;
     return t * (isSea(map, a, b) ? CFG.SEA_SLOW : 1) + 0.3;
   }
 
   // Position (en cases) d'une armée sur le trajet a -> frontière -> b, k entre 0 et 1 (temps écoulé)
-  function legPos(map, a, b, k) {
+  function legPos(map, a, b, k, state, pi) {
     const A = map.terr[a], B = map.terr[b], P = crossingPoint(map, a, b);
     const d1 = Math.hypot(A.lx - P[0], A.ly - P[1]), d2 = Math.hypot(P[0] - B.lx, P[1] - B.ly);
-    const t1 = d1 / TERRAIN[A.terrain].speed, t2 = d2 / TERRAIN[B.terrain].speed;
+    const t1 = d1 / speedOn(map, a, state, pi), t2 = d2 / speedOn(map, b, state, pi);
     const t = k * (t1 + t2);
     if (t <= t1) { const f = t1 ? t / t1 : 0; return [A.lx + (P[0] - A.lx) * f, A.ly + (P[1] - A.ly) * f]; }
     const f = t2 ? (t - t1) / t2 : 1;
@@ -515,7 +528,7 @@
       done[u] = true;
       for (const v of map.terr[u].neighbors) {
         if (done[v]) continue;
-        let c = travelTime(map, u, v);
+        let c = travelTime(map, u, v, state, pi);
         const tv = state.territories[v];
         if (v !== to && tv.owner !== pi) c += 4 + tv.troops * defenseOf(state, map, v) * 0.5;
         if (cost[u] + c < cost[v]) { cost[v] = cost[u] + c; prev[v] = u; }
@@ -583,7 +596,7 @@
       if (n <= 0) return false;
       from.troops -= n;
       const first = path.shift();
-      state.armies.push({ id: state.nextArmy++, owner: pi, from: act.from, to: first, path, n, t: 0, dur: travelTime(map, act.from, first), legs: 1 });
+      state.armies.push({ id: state.nextArmy++, owner: pi, from: act.from, to: first, path, n, t: 0, dur: travelTime(map, act.from, first, state, pi), legs: 1 });
       return true;
     }
     return false;
@@ -684,7 +697,7 @@
       a.from = a.to;
       a.to = a.path.shift();
       a.t = 0;
-      a.dur = travelTime(map, a.from, a.to);
+      a.dur = travelTime(map, a.from, a.to, state, a.owner);
       keep.push(a);
     }
     state.armies = keep;

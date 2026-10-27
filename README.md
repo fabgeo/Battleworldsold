@@ -34,7 +34,8 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
 
   | Carte | Territoires | Découpage |
   |---|---|---|
-  | Aléatoire | 25 / 40 / 60 | d'un seul tenant, sans mer |
+  | Aléatoire | — | une des cartes ci-dessous, tirée au hasard (annoncée au début de la partie) |
+  | Cercle | 22 / 40 / 58 | anneau de terre autour d'un lac ; au centre, une île très riche (Île centrale : +6 / +9 / +12, villes à 5 or, bien gardées) reliée à l'anneau par 4 passages ; pas de départ sur l'île |
   | Europe | 46 / 64 / 79 | pays entiers, puis régions |
   | France | 13 / 42 / 92 | régions, groupes de départements, départements |
   | Italie | 20 / 47 / 106 | régions, groupes de provinces, provinces |
@@ -46,7 +47,7 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
   + le bonus de chaque **région** tenue en entier.
 - **Régions** (comme au Risk) : sous-continents sur la carte Monde (Europe de l'Ouest, Amérique du Sud…), grandes zones en Europe
   (Scandinavie, Balkans…) et en Méditerranée, régions administratives en France et en Italie (regroupées en grandes zones sur les petites cartes),
-  groupes de territoires voisins sur la carte aléatoire. Limites en pointillés dorés ; une région tenue en entier est cerclée de la couleur
+  quarts de l'anneau et île sur le Cercle. Limites en pointillés dorés ; une région tenue en entier est cerclée de la couleur
   de son maître et apparaît sous le classement. Bonus = (nombre de territoires + 1,5 × points d'entrée à défendre) ÷ 3 :
   plus une région est grande et ouverte, plus elle rapporte. Toucher un territoire montre sa région, son bonus et ton avancement.
 - Un soldat coûte **4 or** et apparaît sur le territoire choisi.
@@ -59,9 +60,11 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
   | Montagne | ×1,6 | ×0,5 | +1 |
   | Ville | ×1,1 | normale | +2 |
 
+  Sur **tes propres territoires**, le terrain ralentit beaucoup moins (forêt ×0,88, montagne ×0,8).
+
 - **Bâtiments** (test, désactivables) : Fort 30 or (+50 % de défense chacun), Mine 30 or (+2 or par versement),
   Caserne 45 or (+1 soldat toutes les 3 s). Sur la carte, chaque territoire montre ses bâtiments, pour tous les joueurs :
-  badge gris (F = fort), jaune (M = mine), rouge (C = caserne), avec le nombre s'il y en a plusieurs. Chaque achat rend **le même type** 20 % plus cher (les autres types ne bougent pas).
+  badge gris (F = fort), jaune (M = mine), rouge (C = caserne), avec le nombre s'il y en a plusieurs. Chaque achat rend **le même type** 15 % plus cher (les autres types ne bougent pas).
   Un territoire peut avoir 2 mines et 2 casernes, mais 1 seul fort ; une **capitale** (★) jusqu'à 4 mines et 4 casernes, et 2 forts.
   Les bâtiments restent en place si le territoire change de main.
 - **Envoi de troupes** : depuis un de tes territoires vers n'importe quel territoire. Il reste toujours 1 soldat sur place.

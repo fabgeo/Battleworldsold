@@ -73,7 +73,8 @@
     const o = readOpts();
     const players = 1 + (+$('botCount').value || 3);
     const key = o.size === 'auto' ? E.resolveOpts({ size: 'auto' }, players).sizeKey : o.size;
-    $('sizeHint').textContent = `${territoryCount(o.map, key)} territoires` + (o.size === 'auto' ? ` (auto pour ${players} joueurs)` : '');
+    const count = territoryCount(o.map, key);
+    $('sizeHint').textContent = (count ? `${count} territoires` : 'Une des cartes, tirée au hasard') + (o.size === 'auto' ? ` (taille auto pour ${players} joueurs)` : '');
     const extra = [];
     if (+o.speed !== 1) extra.push(+o.speed < 1 ? 'lente' : 'rapide');
     if (o.startGold !== 'auto') extra.push(o.startGold + ' or');
@@ -106,6 +107,7 @@
     $('chooseBanner').classList.remove('hidden');
   }
   function chooseStart(t) {
+    if (t >= 0 && G.map.terr[t].noCapital) { toast('Pas de départ sur ce territoire : choisis-en un autre', 'warn'); return; }
     const c = G.choosing;
     G.choosing = null;
     $('chooseBanner').classList.add('hidden');
@@ -191,6 +193,7 @@
     $('toasts').innerHTML = '';
     $('chooseBanner').classList.add('hidden');
     G.map = E.generateMap(seed, opts);
+    if (opts.map === 'random') toast('Carte tirée au hasard : ' + G.map.name, 'info');
     G.selected = -1; G.hover = -1; G.baseKey = ''; G.overDismissed = false; G.overShown = false; G.finalShown = false;
     G.paused = false; setBuildOpen(false);
     G.view = { zoom: 1, cx: G.map.w / 2, cy: G.map.h / 2 };
@@ -837,7 +840,7 @@
     const extra = G.mode === 'multi' ? Math.min(0.15, (performance.now() - G.lastStateAt) / 1000) * st.opts.speed : 0;
     for (const a of st.armies) {
       const k = Math.min(1, (a.t + extra) / a.dur);
-      const [x, y] = toScreen(...E.legPos(m, a.from, a.to, k));
+      const [x, y] = toScreen(...E.legPos(m, a.from, a.to, k, st, a.owner));
       if (a.owner === G.me) {
         ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2 * DPR; ctx.setLineDash([5 * DPR, 5 * DPR]);
         ctx.beginPath(); ctx.moveTo(x, y);
