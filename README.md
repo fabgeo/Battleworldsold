@@ -62,9 +62,9 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
 
   Sur **tes propres territoires**, le terrain ralentit beaucoup moins (forêt ×0,88, montagne ×0,8).
 
-- **Bâtiments** (test, désactivables) : Fort 30 or (+50 % de défense chacun), Mine 35 or (+4 or par versement),
+- **Bâtiments** (test, désactivables) : Fort 30 or (+50 % de défense chacun), Mine 35 or (+6 or par versement : remboursée en moins de 30 s),
   Caserne 45 or (+1 soldat toutes les 3 s). Sur la carte, chaque territoire montre ses bâtiments, pour tous les joueurs :
-  badge gris (F = fort), jaune (M = mine), rouge (C = caserne), avec le nombre s'il y en a plusieurs. Chaque achat rend **le même type** 15 % plus cher (les autres types ne bougent pas).
+  badge gris (F = fort), jaune (M = mine), rouge (C = caserne), avec le nombre s'il y en a plusieurs. Chaque achat rend **le même type** 10 % plus cher (les autres types ne bougent pas).
   Un territoire peut avoir 2 mines et 2 casernes, mais 1 seul fort ; une **capitale** (★) jusqu'à 4 mines et 4 casernes, et 2 forts.
   Les bâtiments restent en place si le territoire change de main.
 - **Envoi de troupes** : depuis un de tes territoires vers n'importe quel territoire. Il reste toujours 1 soldat sur place.
@@ -100,7 +100,7 @@ humain ou bot) :
 - dès que le premier a une vraie avance (au moins 2 territoires de plus que le deuxième), les bots normaux et difficiles
   lui réservent **au moins 70 % de leurs attaques contre des joueurs** (en pratique 90 % et plus) ;
 - comme un humain qui clique, ils ont un nombre limité d'actions à chaque réflexion (facile 1, normal 2, difficile 3 ;
-  une vingtaine d'actions par minute) : ils réfléchissent toutes les ~2,6 s (facile), ~2,1 s (normal), ~0,9 s (difficile) ;
+  une vingtaine d'actions par minute) : ils réfléchissent toutes les ~3 s (facile), ~2,5 s (normal), ~0,9 s (difficile) ;
 - ils peuvent l'attaquer même s'il n'est pas leur voisin : l'armée traverse la carte et prend ce qu'il y a sur le chemin ;
 - s'ils ne sont pas assez forts pour frapper, ils accumulent soldats et renforts sur leur base de frappe face à lui ;
 - contre le premier, ils prennent plus de risques (marge de sécurité réduite) pour l'arrêter ;

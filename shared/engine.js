@@ -10,7 +10,7 @@
     BASE_INCOME: 5,        // or/s pour chaque joueur, quoi qu'il possède
     CAPITAL_BONUS: 5,      // or en plus par versement pour la case d'une capitale (pour celui qui la tient)
     TERR_BONUS: 1,         // or en plus par versement pour chaque territoire, en plus de son revenu propre
-    MINE_GOLD: 4,          // or en plus par versement pour chaque mine
+    MINE_GOLD: 6,          // or en plus par versement pour chaque mine (remboursée en ~25 s)
     KILL_GOLD: 100,        // or minimum gagné en éliminant un joueur
     START_GOLD: 25,
     START_TROOPS: 12,
@@ -23,7 +23,7 @@
     OWN_TERRAIN_SLOW: 0.4, // sur ses territoires, le ralentissement du terrain est réduit à 40 % (montagne : 0,8 au lieu de 0,5)
     BARRACKS_EVERY: 3,     // secondes entre deux soldats produits par une caserne
     HISTORY_EVERY: 5,      // secondes entre deux points des statistiques
-    BOT_THINK: { easy: 2.6, normal: 2.1, hard: 0.9 },
+    BOT_THINK: { easy: 3, normal: 2.5, hard: 0.9 },
   };
 
   const TERRAIN = {
@@ -35,12 +35,12 @@
 
   const BUILDINGS = {
     fort: { name: 'Fort', cost: 30, desc: '+50 % de défense', letter: 'F' },
-    mine: { name: 'Mine', cost: 35, desc: '+4 or par versement', letter: 'M' },
+    mine: { name: 'Mine', cost: 35, desc: '+6 or par versement', letter: 'M' },
     barracks: { name: 'Caserne', cost: 45, desc: '+1 soldat / 3 s', letter: 'C' },
   };
-  const BUILD_STEP = 0.15; // chaque bâtiment d'un type acheté rend le suivant du même type 15 % plus cher
+  const BUILD_STEP = 0.1; // chaque bâtiment d'un type acheté rend le suivant du même type 10 % plus cher
 
-  // Prix d'un bâtiment pour un joueur : +15 % par bâtiment de ce type déjà acheté (les autres types ne bougent pas)
+  // Prix d'un bâtiment pour un joueur : +10 % par bâtiment de ce type déjà acheté (les autres types ne bougent pas)
   function buildCost(state, pi, kind) {
     const p = state.players[pi];
     const n = p && p.stats.builtKind ? p.stats.builtKind[kind] || 0 : 0;
