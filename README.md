@@ -40,12 +40,12 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
   | France | 13 / 42 / 92 | régions, groupes de départements, départements |
   | Italie | 20 / 47 / 106 | régions, groupes de provinces, provinces |
   | Méditerranée | 31 / 53 / 74 | pays du pourtour, les grands découpés (Kabylie, Cyrénaïque, Anatolie…) |
-  | Monde | 47 / 79 / 116 | pays (petits voisins regroupés, grands découpés : Sibérie, Alaska, Québec…) |
+  | Monde | 50 / 83 / 118 | pays (petits voisins regroupés, grands découpés : Sibérie, Alaska, Québec…) ; plus de territoires dans les régions denses (Europe, Inde, États-Unis) que dans les immensités vides (Sibérie, Grand Nord canadien) ; petites îles arctiques retirées, archipels d'Indonésie regroupés ; traversée Afrique ↔ Amérique du Sud (Côte-d'Ivoire ↔ Nordeste) |
 
   Les îles sont reliées par des passages maritimes en pointillés ; les pays voisins hors jeu sont en gris.
-- **Revenu** : versé toutes les **4 s** (rythme posé, pour laisser le temps de réfléchir à la stratégie) : 5 or de base pour chaque joueur, + 1 à 3 par territoire, + 5 pour chaque case de capitale (★) tenue (la sienne ou celle prise à un adversaire),
+- **Revenu** : versé toutes les **4 s** (rythme posé, pour laisser le temps de réfléchir à la stratégie) : 5 or de base pour chaque joueur, + 2 à 4 par territoire (son revenu propre + 1), + 5 pour chaque case de capitale (★) tenue (la sienne ou celle prise à un adversaire),
   + le bonus de chaque **région** tenue en entier.
-- **Régions** (comme au Risk) : sous-continents sur la carte Monde (Europe de l'Ouest, Amérique du Sud…), grandes zones en Europe
+- **Régions** (comme au Risk) : continents sur la carte Monde (Amérique du Nord, Amérique du Sud, Europe, Afrique, Russie, Moyen-Orient, Asie, Indonésie et Océanie), grandes zones en Europe
   (Scandinavie, Balkans…) et en Méditerranée, régions administratives en France et en Italie (regroupées en grandes zones sur les petites cartes),
   quarts de l'anneau et île sur le Cercle. Limites en pointillés dorés ; une région tenue en entier est cerclée de la couleur
   de son maître et apparaît sous le classement. Bonus = (nombre de territoires + 1,5 × points d'entrée à défendre) ÷ 3 :
@@ -62,7 +62,7 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
 
   Sur **tes propres territoires**, le terrain ralentit beaucoup moins (forêt ×0,88, montagne ×0,8).
 
-- **Bâtiments** (test, désactivables) : Fort 30 or (+50 % de défense chacun), Mine 30 or (+2 or par versement),
+- **Bâtiments** (test, désactivables) : Fort 30 or (+50 % de défense chacun), Mine 35 or (+4 or par versement),
   Caserne 45 or (+1 soldat toutes les 3 s). Sur la carte, chaque territoire montre ses bâtiments, pour tous les joueurs :
   badge gris (F = fort), jaune (M = mine), rouge (C = caserne), avec le nombre s'il y en a plusieurs. Chaque achat rend **le même type** 15 % plus cher (les autres types ne bougent pas).
   Un territoire peut avoir 2 mines et 2 casernes, mais 1 seul fort ; une **capitale** (★) jusqu'à 4 mines et 4 casernes, et 2 forts.

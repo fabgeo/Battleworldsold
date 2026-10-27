@@ -120,7 +120,10 @@ function buildVariant(R, features, cfg) {
   }
   // 2. unités : chaque morceau d'un seul tenant
   let terrs = components(grid).map(p => ({ members: [p.key], main: p.key, cells: p.cells, part: null }));
-  const total = terrs.reduce((a, t) => a + t.cells.length, 0);
+  // « taille » d'un territoire : sa surface, pondérée par la carte (cfg.weight) pour que les régions
+  // denses (Europe…) aient plus de territoires que les immensités vides (Sibérie, Grand Nord canadien…)
+  const sz = (t) => t.cells.length * (cfg.weight ? cfg.weight(features[t.main]) : 1);
+  const total = terrs.reduce((a, t) => a + sz(t), 0);
   const T = total / cfg.desired;
   // morceaux secondaires d'une même entité (îles) : on note la partie principale pour les nommer
   const biggestOf = {};
@@ -130,8 +133,8 @@ function buildVariant(R, features, cfg) {
   // 3. découpage des très grands territoires (k-moyennes)
   const split = [];
   for (const t of terrs) {
-    const k = Math.min(cfg.maxSplit || 6, Math.round(t.cells.length / T));
-    if (t.cells.length < 1.9 * T || k < 2) { split.push(t); continue; }
+    const k = Math.min(cfg.maxSplit || 6, Math.round(sz(t) / T));
+    if (sz(t) < 1.9 * T || k < 2) { split.push(t); continue; }
     const pts = t.cells.map(c => [c % W, (c / W) | 0]);
     const seeds = [pts[Math.floor(pts.length / 2)]];
     while (seeds.length < k) {
@@ -181,14 +184,37 @@ function buildVariant(R, features, cfg) {
     let pick = -1;
     terrs.forEach((t, i) => {
       if (!adj[i].size) return;
-      if (t.cells.length < cfg.minFactor * T || tooMany) if (pick < 0 || t.cells.length < terrs[pick].cells.length) pick = i;
+      if (sz(t) < cfg.minFactor * T || tooMany) if (pick < 0 || sz(t) < sz(terrs[pick])) pick = i;
     });
-    if (pick < 0) break;
+    if (pick < 0) {
+      // îlots trop petits et sans voisin terrestre (îles arctiques…) : retirés, la carte les ignore
+      const lone = cfg.dropIsland ? terrs.findIndex((t, i) => !adj[i].size && sz(t) < cfg.minFactor * T && cfg.dropIsland(features[t.main])) : -1;
+      if (lone >= 0) { terrs.splice(lone, 1); continue; }
+      // petites îles sans voisin terrestre : regroupées avec le territoire proche du même groupe (archipels)
+      if (!cfg.islandMerge) break;
+      const cen = terrs.map(u => { let sx = 0, sy = 0; for (const c of u.cells) { sx += c % W; sy += (c / W) | 0; } return [sx / u.cells.length, sy / u.cells.length]; });
+      let best = null;
+      terrs.forEach((u, i) => {
+        if (adj[i].size || sz(u) >= cfg.minFactor * T || !cfg.islandMerge.names.includes(features[u.main].name)) return;
+        terrs.forEach((v, j) => {
+          if (j === i || groupOf(v) !== groupOf(u)) return;
+          const d = Math.hypot(cen[i][0] - cen[j][0], cen[i][1] - cen[j][1]);
+          if (d <= cfg.islandMerge.dist && (!best || d < best.d)) best = { d, i, j };
+        });
+      });
+      if (!best) break;
+      const isl = terrs[best.i], dst = terrs[best.j];
+      if (isl.cells.length > dst.cells.length) { dst.main = isl.main; dst.part = isl.part; dst.islandOf = isl.islandOf; }
+      dst.members = [...new Set(dst.members.concat(isl.members))];
+      dst.cells = dst.cells.concat(isl.cells);
+      terrs.splice(best.i, 1);
+      continue;
+    }
     const t = terrs[pick];
     const cands = [...adj[pick]];
     const same = cands.filter(j => groupOf(terrs[j]) != null && groupOf(terrs[j]) === groupOf(t));
     const pool = same.length ? same : cands;
-    const into = pool.sort((a, b) => terrs[a].cells.length - terrs[b].cells.length)[0];
+    const into = pool.sort((a, b) => sz(terrs[a]) - sz(terrs[b]))[0];
     const dst = terrs[into];
     // la cible garde son nom si elle est plus grande ; sinon elle prend celui du territoire absorbé
     if (t.cells.length > dst.cells.length) { dst.main = t.main; dst.part = t.part; dst.islandOf = t.islandOf; }
@@ -219,6 +245,19 @@ function buildVariant(R, features, cfg) {
     }
   }
   let seaLinks = [...links].filter(k => !landAdj.has(k)).map(k => k.split('-').map(Number));
+  // passages imposés par la carte (deux points [lon, lat] : le territoire le plus proche de chacun)
+  const terrAt = (lon, lat) => {
+    const [x0, y0] = R.toCell(lon, lat);
+    for (let rad = 0; rad < 8; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+      const x = x0 + dx, y = y0 + dy;
+      if (x >= 0 && y >= 0 && x < W && y < H && label[y * W + x] >= 0) return label[y * W + x];
+    }
+    return -1;
+  };
+  for (const [[lo1, la1], [lo2, la2]] of cfg.extraLinks || []) {
+    const a = terrAt(lo1, la1), b = terrAt(lo2, la2);
+    if (a >= 0 && b >= 0 && a !== b && !seaLinks.some(([u, v]) => u === Math.min(a, b) && v === Math.max(a, b))) seaLinks.push([Math.min(a, b), Math.max(a, b)]);
+  }
   const coast = terrs.map((t, i) => t.cells.filter(c => nbs(c).some(sea)).map(c => [c % W, (c / W) | 0]));
   for (let guard = 0; guard < 50; guard++) {
     const adj = terrs.map(() => []);
@@ -306,7 +345,7 @@ function buildVariant(R, features, cfg) {
     if (contains(t.cells, cfg.cities || []) && t.cells.length < 2.2 * T) terrain = 'city';
     else if (near(t.cells, cfg.mountains || [], radCells) >= 0.2) terrain = 'mountain';
     else if (near(t.cells, cfg.forests || [], radCells * 1.3) >= 0.25) terrain = 'forest';
-    const income = t.cells.length < 0.6 * T ? 1 : t.cells.length < 1.4 * T ? 2 : 3;
+    const income = sz(t) < 0.6 * T ? 1 : sz(t) < 1.4 * T ? 2 : 3;
     // zone à bonus (continent, région…) : donnée par la carte, d'après le territoire principal ou la position
     const [zx, zy] = centroid(t.cells);
     const zone = cfg.zone ? cfg.zone(f, R.lonOf(zx), R.latOf(zy)) : f.group != null ? f.group : null;
@@ -454,6 +493,14 @@ const MAPS = {};
     forests: [[-60, -5], [-70, -5], [22, 0], [15, 2], [100, 60], [80, 60], [130, 60], [60, 60], [-100, 55], [-80, 52], [113, 0], [102, 2], [18, 63], [27, 62]],
     cities: [[-74, 40.7], [-118.2, 34], [-99.1, 19.4], [-46.6, -23.5], [-58.4, -34.6], [-0.1, 51.5], [2.35, 48.86], [37.6, 55.75], [31.24, 30.04], [3.4, 6.45], [72.9, 19.1], [77.2, 28.6], [116.4, 39.9], [121.5, 31.2], [139.7, 35.7], [127, 37.5], [151.2, -33.9], [28.97, 41.01], [28, -26.2], [106.8, -6.2], [100.5, 13.75], [51.4, 35.7], [67, 24.9], [-77, -12], [-74.1, 4.7], [-87.6, 41.9], [-79.4, 43.7]],
     radiusDeg: 4, seaLink: 3, longLink: 18,
+    // traversée de l'Atlantique Sud : Nordeste (Brésil) ↔ Sénégal, sinon l'Amérique du Sud est un cul-de-sac trop facile à tenir
+    extraLinks: [[[-38, -8], [-15, 14.5]]],
+    // densité de territoires : plus dans les régions peuplées, moins dans les immensités vides
+    weight: (f) => ({ Russie: 0.45, Canada: 0.5, Groenland: 0.3, Australie: 0.5, Kazakhstan: 0.6, Mongolie: 0.5, Algérie: 0.6, Libye: 0.6,
+      'Arabie saoudite': 0.7, Chine: 1.1, Inde: 1.6, 'États-Unis': 1.6 })[f.name] || { Europe: 3, Afrique: 1, Asie: 1.3, 'Amérique du Nord': 1.6, 'Amérique du Sud': 1.4, Océanie: 1.4 }[f.group] || 1,
+    // îles d'un archipel regroupées si elles sont petites
+    islandMerge: { dist: 22, names: ['Indonésie', 'Philippines', 'Malaisie', 'Papouasie', 'Timor oriental', 'Brunéi Darussalam', 'Îles Salomon', 'Vanuatu', 'Fidji', 'Nouvelle-Calédonie'] },
+    dropIsland: (f) => ['Canada', 'Russie', 'Groenland'].includes(f.name),
     places: [['Alaska', -150, 64], ['Sibérie', 100, 62], ['Extrême-Orient russe', 135, 58], ['Oural', 60, 58], ['Kamtchatka', 160, 57], ['Moscovie', 40, 55],
       ['Québec', -72, 52], ['Ontario', -85, 50], ['Colombie-Britannique', -125, 55], ['Prairies', -105, 53], ['Grand Nord canadien', -100, 66], ['Terre-Neuve', -57, 49],
       ['Texas', -99, 31], ['Californie', -120, 37], ['Floride', -82, 28], ['Grands Lacs', -87, 43], ['Nouvelle-Angleterre', -71, 43], ['Rocheuses', -108, 42], ['Grandes Plaines', -98, 40],
@@ -463,25 +510,23 @@ const MAPS = {};
       ['Luçon', 121, 16], ['Mindanao', 125, 7.5], ['Queensland', 145, -22], ['Australie-Occidentale', 122, -25], ['Nouvelle-Galles du Sud', 147, -32], ['Territoire du Nord', 133, -19],
       ['Groenland', -42, 72], ['Sahara', 5, 25], ['Sahel', 0, 15], ['Kazakhstan Est', 78, 48], ['Deccan', 77, 17], ['Gange', 82, 26], ['Sibérie du Sud', 90, 53], ['Yakoutie', 125, 63]],
   };
-  // zones à bonus : sous-continents, d'après la position du territoire (la Russie d'Europe est en Europe)
+  // régions à bonus : les continents, comme au Risk (la Russie à part, l'Asie coupée en deux car très grande),
+  // d'après le pays principal du territoire et sa position
   const worldZone = (f, lon, lat) => {
-    if (lon < -30) return lat > 49 ? (lon < -100 ? 'Alaska et Ouest canadien' : 'Canada et Groenland') : lat > 26 ? 'États-Unis' : lat > 8 ? 'Amérique centrale' : 'Amérique du Sud';
-    if ((lon > 110 && lat < -10) || (lon > 140 && lat < 0)) return 'Océanie';
-    if (lon > -20 && lon < 52 && lat < 36 && !(lon > 34 && lat > 12)) return lat > 14 ? 'Afrique du Nord' : lat < -8 ? 'Afrique australe' : lon < 15 ? "Afrique de l'Ouest" : "Afrique de l'Est";
-    if ((lon < 40 && lat > 35) || (lon < 60 && lat > 45)) return lat > 54 && lon < 32 ? 'Europe du Nord' : lon < 12 ? "Europe de l'Ouest" : "Europe de l'Est";
-    if (lon < 63 && lat < 42) return 'Moyen-Orient';
-    if (lat > 50) return 'Russie et Sibérie';
-    if (lon >= 60 && lon < 92 && lat < 31) return 'Asie du Sud';
-    if (lon >= 92 && lat < 22) return 'Asie du Sud-Est';
-    if (lon < 95) return 'Asie centrale';
-    return "Asie de l'Est";
+    if (f.name === 'Russie') return 'Russie';
+    if (lon < -30) return lat > 12 || (lon < -78 && lat > 7) ? 'Amérique du Nord' : 'Amérique du Sud';
+    if ((lon > 110 && lat < -10) || (lon > 94 && lat < 7) || (lon > 117 && lat < 20)) return 'Indonésie et Océanie';
+    if (lon > -20 && lon < 52 && lat < 36 && !(lon > 34 && lat > 12)) return 'Afrique';
+    if (lat > 35 && lon < 40 && f.name !== 'Turquie') return 'Europe';
+    if (lon < 75 && lat < 45) return 'Moyen-Orient';
+    return 'Asie';
   };
   console.log('Monde');
   const R = rasterize(feats, box);
   MAPS.world = {
-    small: buildVariant(R, feats, { ...terrain, desired: 45, minFactor: 0.45, maxSplit: 6, zone: worldZone }),
-    medium: buildVariant(R, feats, { ...terrain, desired: 75, minFactor: 0.4, maxSplit: 8, zone: worldZone }),
-    large: buildVariant(R, feats, { ...terrain, desired: 110, minFactor: 0.3, maxSplit: 10, zone: worldZone }),
+    small: buildVariant(R, feats, { ...terrain, desired: 60, minFactor: 0.45, maxSplit: 6, zone: worldZone }),
+    medium: buildVariant(R, feats, { ...terrain, desired: 90, minFactor: 0.4, maxSplit: 8, zone: worldZone }),
+    large: buildVariant(R, feats, { ...terrain, desired: 122, minFactor: 0.3, maxSplit: 10, zone: worldZone }),
   };
 }
 

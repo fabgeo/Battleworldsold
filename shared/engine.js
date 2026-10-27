@@ -9,6 +9,8 @@
     SOLDIER_COST: 4,
     BASE_INCOME: 5,        // or/s pour chaque joueur, quoi qu'il possède
     CAPITAL_BONUS: 5,      // or en plus par versement pour la case d'une capitale (pour celui qui la tient)
+    TERR_BONUS: 1,         // or en plus par versement pour chaque territoire, en plus de son revenu propre
+    MINE_GOLD: 4,          // or en plus par versement pour chaque mine
     KILL_GOLD: 100,        // or minimum gagné en éliminant un joueur
     START_GOLD: 25,
     START_TROOPS: 12,
@@ -33,7 +35,7 @@
 
   const BUILDINGS = {
     fort: { name: 'Fort', cost: 30, desc: '+50 % de défense', letter: 'F' },
-    mine: { name: 'Mine', cost: 30, desc: '+2 or par versement', letter: 'M' },
+    mine: { name: 'Mine', cost: 35, desc: '+4 or par versement', letter: 'M' },
     barracks: { name: 'Caserne', cost: 45, desc: '+1 soldat / 3 s', letter: 'C' },
   };
   const BUILD_STEP = 0.15; // chaque bâtiment d'un type acheté rend le suivant du même type 15 % plus cher
@@ -56,7 +58,7 @@
   // Or rapporté par un territoire à chaque versement : base + terrain + mines + capitale
   function terrIncome(state, map, i) {
     const t = state.territories[i];
-    return map.terr[i].income + TERRAIN[map.terr[i].terrain].income + 2 * countOf(t, 'mine')
+    return map.terr[i].income + CFG.TERR_BONUS + TERRAIN[map.terr[i].terrain].income + CFG.MINE_GOLD * countOf(t, 'mine')
       + ((state.capitals || []).includes(i) ? CFG.CAPITAL_BONUS : 0);
   }
   // Joueur qui tient toute une région (-1 sinon)
@@ -89,7 +91,9 @@
       if (lone < 0) break;
       const cands = terr[lone].neighbors.map(v => zoneOf[v]).filter(z => z !== zoneOf[lone]);
       if (!cands.length) break;
-      zoneOf[lone] = cands.sort((a, b) => size[a] - size[b])[0];
+      // la voisine avec qui il partage le plus de frontières (à égalité, la plus petite)
+      const links = (z) => cands.filter(c => c === z).length;
+      zoneOf[lone] = cands.sort((a, b) => links(b) - links(a) || size[a] - size[b])[0];
     }
     const zones = [];
     names.forEach((name, z) => {
