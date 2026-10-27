@@ -184,3 +184,9 @@ button.link:hover { background: none; text-decoration: underline; }
 #game.immersive #toasts { top: max(52px, env(safe-area-inset-top, 0px)); }
 /* téléphone étroit en portrait : on masque +1 pour garder une seule ligne avec le bouton Auto */
 @media (max-width: 430px) { #bottombar [data-buy="1"] { display: none; } #bottombar { gap: 6px; padding-left: max(6px, env(safe-area-inset-left, 0px)); padding-right: max(6px, env(safe-area-inset-right, 0px)); } #bottombar .group { gap: 2px; } }
+
+/* Classement : régions tenues en entier */
+#scoreboard .zones-title { margin: 6px 0 2px; padding-top: 5px; border-top: 1px solid #3a434e; color: #ffd84a; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+#scoreboard .zone { font-size: 12px; }
+#scoreboard .zone .dot { width: 9px; height: 9px; }
+#scoreboard .zone.more { color: #9aa5b1; }

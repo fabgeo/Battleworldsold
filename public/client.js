@@ -298,11 +298,21 @@
     b.strokeStyle = 'rgba(40,30,20,0.35)'; b.lineWidth = 1.2; b.stroke(thin);
     b.strokeStyle = 'rgba(15,30,50,0.8)'; b.lineWidth = 2; b.stroke(coast);
     b.strokeStyle = 'rgba(25,20,15,0.85)'; b.lineWidth = 3; b.stroke(thick);
-    // Zones riches : contour doré en pointillés
-    if (st.rich) {
-      const rich = new Path2D();
-      for (const [x1, y1, x2, y2, a, c] of m.segments) if (!!st.rich[a] !== (c >= 0 && !!st.rich[c])) { rich.moveTo(x1 * S, y1 * S); rich.lineTo(x2 * S, y2 * S); }
-      b.setLineDash([7, 5]); b.strokeStyle = '#ffd84a'; b.lineWidth = 3; b.stroke(rich); b.setLineDash([]);
+    // Régions à bonus : limites en pointillés dorés ; une région tenue en entier est cerclée de la couleur de son maître
+    if (m.zones) {
+      const held = m.zones.map((z, k) => E.zoneOwner(st, m, k));
+      const limits = new Path2D(), byOwner = {};
+      for (const [x1, y1, x2, y2, a, c] of m.segments) {
+        const za = m.terr[a].zone, zc = c >= 0 ? m.terr[c].zone : -1;
+        if (za === zc) continue;
+        if (zc >= 0) { limits.moveTo(x1 * S, y1 * S); limits.lineTo(x2 * S, y2 * S); }
+        for (const z of [za, zc]) if (z >= 0 && held[z] >= 0) {
+          const p = byOwner[held[z]] || (byOwner[held[z]] = new Path2D());
+          p.moveTo(x1 * S, y1 * S); p.lineTo(x2 * S, y2 * S);
+        }
+      }
+      for (const o in byOwner) { b.strokeStyle = st.players[o].color; b.lineWidth = 6; b.stroke(byOwner[o]); }
+      b.setLineDash([8, 5]); b.strokeStyle = 'rgba(255,216,74,0.9)'; b.lineWidth = 2.5; b.stroke(limits); b.setLineDash([]);
     }
     // Passages maritimes
     b.strokeStyle = 'rgba(220,235,255,0.55)'; b.lineWidth = 2; b.setLineDash([6, 6]);
@@ -809,14 +819,8 @@
       ctx.fillText(txt, x, y + 1);
       const caps = st.capitals || st.players.map(pl => pl.capital);
       if (caps.includes(i)) drawStar(x, y - r - R * 0.35, R * 0.62);
-      ctx.font = font(R * 0.75, 700);
-      const inc = E.terrIncome(st, m, i);
-      if (st.rich && st.rich[i]) { // zone riche : revenu en or sur fond sombre
-        const w = ctx.measureText('+' + inc).width + R * 0.5;
-        ctx.fillStyle = 'rgba(40,30,10,0.85)'; ctx.fillRect(x - w / 2, y + r + R * 0.12, w, R * 0.86);
-        ctx.fillStyle = '#ffd84a';
-      } else ctx.fillStyle = 'rgba(30,25,15,0.85)';
-      ctx.fillText('+' + inc, x, y + r + R * 0.55);
+      ctx.font = font(R * 0.75, 700); ctx.fillStyle = 'rgba(30,25,15,0.85)';
+      ctx.fillText('+' + E.terrIncome(st, m, i), x, y + r + R * 0.55);
       // un badge par type de bâtiment (avec le nombre s'il y en a plusieurs), empilés à droite de l'étiquette
       // couleur par type : Fort gris pierre, Mine or, Caserne rouge (visible pour tous les joueurs)
       Object.keys(E.BUILDINGS).filter(k => t.buildings.includes(k)).forEach((k, j) => {
@@ -875,7 +879,12 @@
     const st = G.state, m = G.map, t = st.territories[i], T = m.terr[i];
     const owner = t.owner >= 0 ? st.players[t.owner].name : 'Neutre';
     const inc = E.terrIncome(st, m, i);
-    const ter = E.TERRAIN[T.terrain].name + (st.rich && st.rich[i] ? ' · zone riche' : '') + (st.capitals && st.capitals.includes(i) ? ' · capitale' : '');
+    let ter = E.TERRAIN[T.terrain].name + (st.capitals && st.capitals.includes(i) ? ' · capitale' : '');
+    if (m.zones) { // région : bonus et avancement (le mien, ou qui la tient)
+      const z = m.zones[T.zone], held = E.zoneOwner(st, m, T.zone);
+      const mine = z.terr.filter(k => st.territories[k].owner === G.me).length;
+      ter += ` · ${z.name} +${z.bonus} (${held >= 0 ? (held === G.me ? 'à toi' : 'à ' + st.players[held].name) : `toi ${mine}/${z.terr.length}`})`;
+    }
     const bld = t.buildings.length ? ' · ' + Object.keys(E.BUILDINGS).filter(k => t.buildings.includes(k))
       .map(k => E.BUILDINGS[k].name + (E.countOf(t, k) > 1 ? ' ×' + E.countOf(t, k) : '')).join(', ') : '';
     if (t.owner === G.me) return `${ter}${bld} · ${t.troops} soldats · +${inc} or`;
@@ -902,7 +911,12 @@
     $('scoreboard').innerHTML = order.map(i => {
       const p = st.players[i];
       return `<div class="${p.alive ? '' : 'dead'}"><span class="dot" style="background:${p.color}"></span>${escapeHtml(p.name)}${i === G.me ? ' (toi)' : ''}<span class="n">${counts[i]}</span></div>`;
-    }).join('');
+    }).join('') + (() => { // régions tenues en entier (bonus de revenu)
+      const held = (m.zones || []).map((z, k) => ({ z, o: E.zoneOwner(st, m, k) })).filter(h => h.o >= 0).sort((a, b) => b.z.bonus - a.z.bonus);
+      if (!held.length) return '';
+      return '<p class="zones-title">Régions</p>' + held.slice(0, 5).map(h => `<div class="zone"><span class="dot" style="background:${st.players[h.o].color}"></span>${escapeHtml(h.z.name)}<span class="n">+${h.z.bonus}</span></div>`).join('')
+        + (held.length > 5 ? `<div class="zone more">+ ${held.length - 5} autre${held.length > 6 ? 's' : ''}</div>` : '');
+    })();
 
     // Barre du bas : sélection (ou cible survolée) + achat
     const sel = G.selected;

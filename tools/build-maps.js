@@ -82,7 +82,7 @@ function rasterize(features, cfg) {
     }
   }
   const toCell = (lon, lat) => [Math.floor((lon - lon0) * KX / STEP), Math.floor((lat1 - lat) / STEP)];
-  return { W, H, grid, toCell, cellDeg: STEP };
+  return { W, H, grid, toCell, lonOf, latOf, cellDeg: STEP };
 }
 
 // ---------- Outils de grille ----------
@@ -307,7 +307,10 @@ function buildVariant(R, features, cfg) {
     else if (near(t.cells, cfg.mountains || [], radCells) >= 0.2) terrain = 'mountain';
     else if (near(t.cells, cfg.forests || [], radCells * 1.3) >= 0.25) terrain = 'forest';
     const income = t.cells.length < 0.6 * T ? 1 : t.cells.length < 1.4 * T ? 2 : 3;
-    return { name: n2, terrain, income };
+    // zone à bonus (continent, région…) : donnée par la carte, d'après le territoire principal ou la position
+    const [zx, zy] = centroid(t.cells);
+    const zone = cfg.zone ? cfg.zone(f, R.lonOf(zx), R.latOf(zy)) : f.group != null ? f.group : null;
+    return zone ? { name: n2, terrain, income, zone } : { name: n2, terrain, income };
   });
   const final = new Int16Array(W * H).fill(-1);
   terrs.forEach((t, i) => { for (const c of t.cells) final[c] = i; });
@@ -358,11 +361,14 @@ const MAPS = {};
     radiusDeg: 0.6, seaLink: 4, longLink: 40, foreign: landMask(box),
     places: [['Corse', 9.1, 42.1], ['Bretagne', -3, 48.2], ['Normandie', 0, 49]],
   };
+  const FR_MACRO = { 'Hauts-de-France': 'Nord', Normandie: 'Nord', 'Île-de-France': 'Nord', 'Grand Est': 'Est', 'Bourgogne-Franche-Comté': 'Est',
+    Bretagne: 'Ouest', 'Pays de la Loire': 'Ouest', 'Centre-Val de Loire': 'Ouest', 'Nouvelle-Aquitaine': 'Sud-Ouest', Occitanie: 'Sud-Ouest',
+    'Auvergne-Rhône-Alpes': 'Sud-Est', "Provence-Alpes-Côte d'Azur": 'Sud-Est', Corse: 'Sud-Est' };
   console.log('France');
   const Rr = rasterize(regs.map(f => ({ name: f.properties.nom, group: null, geom: f.geometry })), box);
   const Rd = rasterize(deps, box);
   MAPS.france = {
-    small: buildVariant(Rr, regs.map(f => ({ name: f.properties.nom })), { ...terrain, desired: 13, minFactor: 0 }),
+    small: buildVariant(Rr, regs.map(f => ({ name: f.properties.nom })), { ...terrain, desired: 13, minFactor: 0, zone: (f) => FR_MACRO[f.name] }),
     medium: buildVariant(Rd, deps, { ...terrain, desired: 40, minFactor: 0.45 }),
     large: buildVariant(Rd, deps, { ...terrain, desired: 94, minFactor: 0.15 }),
   };
@@ -380,19 +386,34 @@ const MAPS = {};
     radiusDeg: 0.45, seaLink: 4, longLink: 40, foreign: landMask(box),
     places: [['Sardaigne', 9, 40.1], ['Sicile', 14.1, 37.5], ['Elbe', 10.25, 42.78]],
   };
+  const IT_FR = { Piemonte: 'Piémont', "Valle d'Aosta/Vallée d'Aoste": "Vallée d'Aoste", Liguria: 'Ligurie', Lombardia: 'Lombardie',
+    'Trentino-Alto Adige/Südtirol': 'Trentin-Haut-Adige', Veneto: 'Vénétie', 'Friuli-Venezia Giulia': 'Frioul', 'Emilia-Romagna': 'Émilie-Romagne',
+    Marche: 'Marches', Toscana: 'Toscane', Umbria: 'Ombrie', Lazio: 'Latium', Campania: 'Campanie', Abruzzo: 'Abruzzes', Molise: 'Molise',
+    Puglia: 'Pouilles', Basilicata: 'Basilicate', Calabria: 'Calabre', Sicilia: 'Sicile', Sardegna: 'Sardaigne' };
+  const IT_MACRO = (r) => ({ Piemonte: 'Nord-Ouest', "Valle d'Aosta/Vallée d'Aoste": 'Nord-Ouest', Liguria: 'Nord-Ouest', Lombardia: 'Nord-Ouest',
+    'Trentino-Alto Adige/Südtirol': 'Nord-Est', Veneto: 'Nord-Est', 'Friuli-Venezia Giulia': 'Nord-Est', 'Emilia-Romagna': 'Nord-Est',
+    Toscana: 'Centre', Umbria: 'Centre', Marche: 'Centre', Lazio: 'Centre', Sicilia: 'Îles', Sardegna: 'Îles' })[r] || 'Sud';
   console.log('Italie');
   const Rr = rasterize(regs, box), Rp = rasterize(provs, box);
   MAPS.italy = {
-    small: buildVariant(Rr, regs, { ...terrain, desired: 20, minFactor: 0 }),
-    medium: buildVariant(Rp, provs, { ...terrain, desired: 45, minFactor: 0.45 }),
-    large: buildVariant(Rp, provs, { ...terrain, desired: 100, minFactor: 0.15 }),
+    small: buildVariant(Rr, regs, { ...terrain, desired: 20, minFactor: 0, zone: (f) => IT_MACRO(f.name) }),
+    medium: buildVariant(Rp, provs, { ...terrain, desired: 45, minFactor: 0.45, zone: (f) => IT_MACRO(f.group) }),
+    large: buildVariant(Rp, provs, { ...terrain, desired: 100, minFactor: 0.15, zone: (f) => IT_FR[f.group] }),
   };
 }
 
 // Méditerranée : pays du pourtour (les grands découpés)
 {
   const keep = ['Portugal', 'Spain', 'France', 'Monaco', 'Andorra', 'Italy', 'San Marino', 'Vatican', 'Malta', 'Switzerland', 'Slovenia', 'Croatia', 'Bosnia and Herz.', 'Montenegro', 'Serbia', 'Kosovo', 'Albania', 'Macedonia', 'North Macedonia', 'Greece', 'Bulgaria', 'Turkey', 'Cyprus', 'N. Cyprus', 'Syria', 'Lebanon', 'Israel', 'Palestine', 'Jordan', 'Egypt', 'Libya', 'Tunisia', 'Algeria', 'Morocco', 'W. Sahara', 'Romania', 'Hungary', 'Austria', 'Iraq', 'Saudi Arabia'];
-  const feats = world50.filter(f => keep.includes(f.properties.name)).map(f => ({ name: countryName(f), group: null, geom: f.geometry }));
+  const feats = world50.filter(f => keep.includes(f.properties.name)).map(f => ({ name: countryName(f), group: null, en: f.properties.name, geom: f.geometry }));
+  const MED_ZONE = {};
+  for (const [z, list] of Object.entries({
+    'Ibérie': ['Portugal', 'Spain', 'Andorra'], 'France et Alpes': ['France', 'Monaco', 'Switzerland'], 'Italie': ['Italy', 'San Marino', 'Vatican', 'Malta'],
+    'Europe centrale': ['Austria', 'Hungary', 'Slovenia', 'Romania'],
+    'Balkans': ['Croatia', 'Bosnia and Herz.', 'Montenegro', 'Serbia', 'Kosovo', 'Albania', 'Macedonia', 'North Macedonia', 'Greece', 'Bulgaria'],
+    'Anatolie': ['Turkey', 'Cyprus', 'N. Cyprus'], 'Levant': ['Syria', 'Lebanon', 'Israel', 'Palestine', 'Jordan', 'Iraq', 'Saudi Arabia'],
+    'Égypte et Libye': ['Egypt', 'Libya'], 'Maroc': ['Morocco', 'W. Sahara'], 'Algérie et Tunisie': ['Algeria', 'Tunisia'],
+  })) for (const c of list) MED_ZONE[c] = z;
   const box = { lon0: -10, lon1: 37, lat0: 29, lat1: 46.5, H: 120, latRef: 38 };
   const terrain = {
     mountains: [[-5, 32], [-7.5, 31], [-1, 34], [4.3, 36.4], [0.5, 42.7], [-3.3, 37.1], [7, 45.5], [10, 46.2], [13.5, 42.3], [15.5, 40.5], [18, 43.5], [19.5, 42.5], [21.3, 39.8], [24, 42], [33, 37], [36, 38], [36, 34], [9.3, 40], [9.1, 42.2]],
@@ -410,9 +431,9 @@ const MAPS = {};
   console.log('Méditerranée');
   const R = rasterize(feats, box);
   MAPS.med = {
-    small: buildVariant(R, feats, { ...terrain, desired: 30, minFactor: 0.4, maxSplit: 5 }),
-    medium: buildVariant(R, feats, { ...terrain, desired: 50, minFactor: 0.35, maxSplit: 6 }),
-    large: buildVariant(R, feats, { ...terrain, desired: 75, minFactor: 0.3, maxSplit: 8 }),
+    small: buildVariant(R, feats, { ...terrain, desired: 30, minFactor: 0.4, maxSplit: 5, zone: (f) => MED_ZONE[f.en] }),
+    medium: buildVariant(R, feats, { ...terrain, desired: 50, minFactor: 0.35, maxSplit: 6, zone: (f) => MED_ZONE[f.en] }),
+    large: buildVariant(R, feats, { ...terrain, desired: 75, minFactor: 0.3, maxSplit: 8, zone: (f) => MED_ZONE[f.en] }),
   };
 }
 
@@ -442,12 +463,25 @@ const MAPS = {};
       ['Luçon', 121, 16], ['Mindanao', 125, 7.5], ['Queensland', 145, -22], ['Australie-Occidentale', 122, -25], ['Nouvelle-Galles du Sud', 147, -32], ['Territoire du Nord', 133, -19],
       ['Groenland', -42, 72], ['Sahara', 5, 25], ['Sahel', 0, 15], ['Kazakhstan Est', 78, 48], ['Deccan', 77, 17], ['Gange', 82, 26], ['Sibérie du Sud', 90, 53], ['Yakoutie', 125, 63]],
   };
+  // zones à bonus : sous-continents, d'après la position du territoire (la Russie d'Europe est en Europe)
+  const worldZone = (f, lon, lat) => {
+    if (lon < -30) return lat > 49 ? (lon < -100 ? 'Alaska et Ouest canadien' : 'Canada et Groenland') : lat > 26 ? 'États-Unis' : lat > 8 ? 'Amérique centrale' : 'Amérique du Sud';
+    if ((lon > 110 && lat < -10) || (lon > 140 && lat < 0)) return 'Océanie';
+    if (lon > -20 && lon < 52 && lat < 36 && !(lon > 34 && lat > 12)) return lat > 14 ? 'Afrique du Nord' : lat < -8 ? 'Afrique australe' : lon < 15 ? "Afrique de l'Ouest" : "Afrique de l'Est";
+    if ((lon < 40 && lat > 35) || (lon < 60 && lat > 45)) return lat > 54 && lon < 32 ? 'Europe du Nord' : lon < 12 ? "Europe de l'Ouest" : "Europe de l'Est";
+    if (lon < 63 && lat < 42) return 'Moyen-Orient';
+    if (lat > 50) return 'Russie et Sibérie';
+    if (lon >= 60 && lon < 92 && lat < 31) return 'Asie du Sud';
+    if (lon >= 92 && lat < 22) return 'Asie du Sud-Est';
+    if (lon < 95) return 'Asie centrale';
+    return "Asie de l'Est";
+  };
   console.log('Monde');
   const R = rasterize(feats, box);
   MAPS.world = {
-    small: buildVariant(R, feats, { ...terrain, desired: 45, minFactor: 0.45, maxSplit: 6 }),
-    medium: buildVariant(R, feats, { ...terrain, desired: 75, minFactor: 0.4, maxSplit: 8 }),
-    large: buildVariant(R, feats, { ...terrain, desired: 110, minFactor: 0.3, maxSplit: 10 }),
+    small: buildVariant(R, feats, { ...terrain, desired: 45, minFactor: 0.45, maxSplit: 6, zone: worldZone }),
+    medium: buildVariant(R, feats, { ...terrain, desired: 75, minFactor: 0.4, maxSplit: 8, zone: worldZone }),
+    large: buildVariant(R, feats, { ...terrain, desired: 110, minFactor: 0.3, maxSplit: 10, zone: worldZone }),
   };
 }
 

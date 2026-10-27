@@ -43,7 +43,12 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
 
   Les îles sont reliées par des passages maritimes en pointillés ; les pays voisins hors jeu sont en gris.
 - **Revenu** : versé toutes les **4 s** (rythme posé, pour laisser le temps de réfléchir à la stratégie) : 5 or de base pour chaque joueur, + 1 à 3 par territoire, + 5 pour chaque case de capitale (★) tenue (la sienne ou celle prise à un adversaire),
-  + 2 par territoire de **zone riche** (petits groupes de 2-3 territoires entourés de pointillés dorés, revenu affiché en or, un peu mieux gardés au départ).
+  + le bonus de chaque **région** tenue en entier.
+- **Régions** (comme au Risk) : sous-continents sur la carte Monde (Europe de l'Ouest, Amérique du Sud…), grandes zones en Europe
+  (Scandinavie, Balkans…) et en Méditerranée, régions administratives en France et en Italie (regroupées en grandes zones sur les petites cartes),
+  groupes de territoires voisins sur la carte aléatoire. Limites en pointillés dorés ; une région tenue en entier est cerclée de la couleur
+  de son maître et apparaît sous le classement. Bonus = (nombre de territoires + 1,5 × points d'entrée à défendre) ÷ 3 :
+  plus une région est grande et ouverte, plus elle rapporte. Toucher un territoire montre sa région, son bonus et ton avancement.
 - Un soldat coûte **4 or** et apparaît sur le territoire choisi.
 - **Terrains** :
 
@@ -67,7 +72,7 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
 - **Combat** : les défenseurs comptent ×1,2 × terrain × fort, l'attaque a ±15 % d'aléatoire.
 - Chaque **capitale de départ** (joueur et bots) garde une étoile ★ toute la partie.
 - **Capitale prise** : le vaincu perd la moitié de son or, que le vainqueur récupère.
-- Un joueur sans territoire ni armée en marche est éliminé : celui qui lui a pris son dernier territoire **récupère tout son or restant**.
+- Un joueur sans territoire ni armée en marche est éliminé : celui qui lui a pris son dernier territoire **récupère tout son or restant, et au moins 100 or**.
 - **Victoire** : contrôler **75 % des territoires** (domination), ou être le dernier en vie.
 - **Envois automatiques** : une route entre deux de tes territoires reliés ; toutes les 2 s, les soldats du premier
   (sauf 1) partent vers le second. Elle s'arrête si un des deux change de main ou si le chemin est coupé.
@@ -95,7 +100,11 @@ humain ou bot) :
   une vingtaine d'actions par minute) : ils réfléchissent toutes les ~2,6 s (facile), ~2,1 s (normal), ~0,9 s (difficile) ;
 - ils peuvent l'attaquer même s'il n'est pas leur voisin : l'armée traverse la carte et prend ce qu'il y a sur le chemin ;
 - s'ils ne sont pas assez forts pour frapper, ils accumulent soldats et renforts sur leur base de frappe face à lui ;
-- quand tout le monde est au coude à coude, ils s'étendent et achèvent les joueurs presque éliminés, pour que la partie avance ;
+- contre le premier, ils prennent plus de risques (marge de sécurité réduite) pour l'arrêter ;
+- **joueur presque éliminé** (3 territoires au plus face à un empire 4 fois plus grand) : tous les bots, même faciles,
+  vont l'achever en priorité, même loin de chez eux ;
+- **régions** : ils visent les territoires qui complètent une de leurs régions, et ceux qui cassent le bonus d'un adversaire ;
+- quand tout le monde est au coude à coude, ils s'étendent, pour que la partie avance ;
 - **défense** (normal et difficile) : ils repèrent les armées ennemies en route vers leurs territoires, n'en retirent plus
   de soldats, achètent des défenseurs sur place (priorité à la capitale, aux villes et aux montagnes) et appellent
   des renforts de leurs territoires voisins ;
