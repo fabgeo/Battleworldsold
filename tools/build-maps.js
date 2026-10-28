@@ -493,14 +493,20 @@ const MAPS = {};
     forests: [[-60, -5], [-70, -5], [22, 0], [15, 2], [100, 60], [80, 60], [130, 60], [60, 60], [-100, 55], [-80, 52], [113, 0], [102, 2], [18, 63], [27, 62]],
     cities: [[-74, 40.7], [-118.2, 34], [-99.1, 19.4], [-46.6, -23.5], [-58.4, -34.6], [-0.1, 51.5], [2.35, 48.86], [37.6, 55.75], [31.24, 30.04], [3.4, 6.45], [72.9, 19.1], [77.2, 28.6], [116.4, 39.9], [121.5, 31.2], [139.7, 35.7], [127, 37.5], [151.2, -33.9], [28.97, 41.01], [28, -26.2], [106.8, -6.2], [100.5, 13.75], [51.4, 35.7], [67, 24.9], [-77, -12], [-74.1, 4.7], [-87.6, 41.9], [-79.4, 43.7]],
     radiusDeg: 4, seaLink: 3, longLink: 18,
-    // traversée de l'Atlantique Sud : Nordeste (Brésil) ↔ Sénégal, sinon l'Amérique du Sud est un cul-de-sac trop facile à tenir
-    extraLinks: [[[-38, -8], [-15, 14.5]]],
+    // traversées de l'Atlantique, présentes sur toutes les tailles de carte :
+    // route du nord (Canada ↔ Groenland ↔ Islande ↔ Royaume-Uni), Terre-Neuve ↔ Irlande, États-Unis ↔ Péninsule ibérique,
+    // et Atlantique Sud : Nordeste (Brésil) ↔ Sénégal (sinon l'Amérique du Sud est un cul-de-sac trop facile à tenir)
+    extraLinks: [
+      [[-68, 60], [-45, 64]], [[-35, 66], [-19, 65]], [[-18, 64.5], [-2, 54]],
+      [[-58, 49], [-8, 53]], [[-75, 38], [-8, 40]],
+      [[-38, -8], [-15, 14.5]],
+    ],
     // densité de territoires : plus dans les régions peuplées, moins dans les immensités vides
     weight: (f) => ({ Russie: 0.45, Canada: 0.5, Groenland: 0.3, Australie: 0.5, Kazakhstan: 0.6, Mongolie: 0.5, Algérie: 0.6, Libye: 0.6,
       'Arabie saoudite': 0.7, Chine: 1.1, Inde: 1.6, 'États-Unis': 1.6 })[f.name] || { Europe: 3, Afrique: 1, Asie: 1.3, 'Amérique du Nord': 1.6, 'Amérique du Sud': 1.4, Océanie: 1.4 }[f.group] || 1,
     // îles d'un archipel regroupées si elles sont petites
     islandMerge: { dist: 22, names: ['Indonésie', 'Philippines', 'Malaisie', 'Papouasie', 'Timor oriental', 'Brunéi Darussalam', 'Îles Salomon', 'Vanuatu', 'Fidji', 'Nouvelle-Calédonie'] },
-    dropIsland: (f) => ['Canada', 'Russie', 'Groenland'].includes(f.name),
+    dropIsland: (f) => ['Canada', 'Russie'].includes(f.name),
     places: [['Alaska', -150, 64], ['Sibérie', 100, 62], ['Extrême-Orient russe', 135, 58], ['Oural', 60, 58], ['Kamtchatka', 160, 57], ['Moscovie', 40, 55],
       ['Québec', -72, 52], ['Ontario', -85, 50], ['Colombie-Britannique', -125, 55], ['Prairies', -105, 53], ['Grand Nord canadien', -100, 66], ['Terre-Neuve', -57, 49],
       ['Texas', -99, 31], ['Californie', -120, 37], ['Floride', -82, 28], ['Grands Lacs', -87, 43], ['Nouvelle-Angleterre', -71, 43], ['Rocheuses', -108, 42], ['Grandes Plaines', -98, 40],
