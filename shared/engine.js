@@ -990,27 +990,28 @@
       if (launch(src, best.tg, n)) used.add(best.tg);
     }
 
-    // 3. Bâtiments : uniquement avec l'or en trop, pour s'améliorer
+    // 3. Bâtiments : dès que la défense est assurée, l'or en trop sert à s'améliorer
     //    mine à l'arrière (surtout la capitale, surtout en début de partie), caserne près du front ou sur la base
     //    de frappe, fort sur un territoire de valeur menacé. Le bot épargne pour le meilleur choix quand rien ne presse.
-    const underAttack = mine.some(i => hostile[i] > 0);
     let plan = null; // bâtiment visé : { t, kind, cost, score }
-    // limites : forts selon la taille de l'empire, et un nombre total de bâtiments raisonnable
+    // limites : forts selon la taille de l'empire, et au plus 2 bâtiments de plus que de territoires
     let myForts = 0, myBuildings = 0;
     for (const i of mine) { myForts += countOf(T[i], 'fort'); myBuildings += T[i].buildings.length; }
-    const fortCap = Math.max(1, Math.floor(mine.length / 6)), buildCap = 1 + Math.floor(mine.length * 0.5);
-    const late = state.time > 900; // après 15 min, on n'épargne plus pour bâtir (sauf casernes)
-    // Or « en trop » = ce qui reste une fois le front et la capitale correctement défendus
+    const fortCap = Math.max(1, Math.floor(mine.length / 4)), buildCap = 2 + mine.length;
+    const late = state.time > 900; // après 15 min, on n'épargne plus pour bâtir (on construit seulement avec l'or qui reste)
+    // Or « en trop » = ce qui reste une fois le front, la capitale et les territoires attaqués correctement défendus
     let defenseGold = 0;
     for (const i of frontier) {
       let enemy = 0;
       for (const n of map.terr[i].neighbors) if (T[n].owner >= 0 && T[n].owner !== pi) enemy = Math.max(enemy, T[n].troops);
-      const want = (p.capital === i ? 1.3 : 0.8) * enemy; // la capitale doit tenir face au plus gros voisin
+      const want = Math.max((p.capital === i ? 1.3 : 0.8) * enemy, hostile[i] * 1.15); // la capitale doit tenir face au plus gros voisin
       defenseGold += Math.max(0, Math.ceil(want / defenseOf(state, map, i)) - T[i].troops) * CFG.SOLDIER_COST;
     }
-    const firstBuild = { easy: 200, normal: 150, hard: 120 }[level] || 150; // pas de bâtiment en tout début de partie
-    const canInvest = state.time >= firstBuild && state.time - (p.lastBuild || -99) >= 45;
-    if (state.opts.buildings && !underAttack && canInvest && myBuildings < buildCap) {
+    // pas de bâtiment en tout début de partie, puis au plus un toutes les quelques secondes
+    const firstBuild = { easy: 120, normal: 60, hard: 45 }[level] || 60;
+    const gap = { easy: 30, normal: 15, hard: 10 }[level] || 15;
+    const canInvest = state.time >= firstBuild && state.time - (p.lastBuild || -99) >= gap;
+    if (state.opts.buildings && canInvest && myBuildings < buildCap) {
       const nearFront = new Set(frontier);
       for (const f of frontier) for (const n of map.terr[f].neighbors) if (T[n].owner === pi) nearFront.add(n);
       const early = Math.max(0, 1 - state.time / 900); // les mines rapportent plus si on les construit tôt
@@ -1024,10 +1025,9 @@
           let score = 0;
           if (kind === 'mine') score = (front ? 1 : 5) + (isCap ? 4 : 0) + 4 * early;
           else if (kind === 'barracks') score = (nearFront.has(i) ? 4 : 1) + (isCap ? 2 : 0) + (strike && strike.from === i ? 3 : 0);
-          else if (front && myForts < fortCap && (isCap || TERRAIN[map.terr[i].terrain].income > 0 || map.terr[i].terrain === 'mountain')
-            && enemy > 0.8 * T[i].troops * defenseOf(state, map, i)) score = val / 2 + Math.min(3, 2 * enemy / Math.max(1, T[i].troops * defenseOf(state, map, i)));
+          else if (front && myForts < fortCap && (isCap || TERRAIN[map.terr[i].terrain].income > 0 || map.terr[i].terrain === 'mountain' || hostile[i] > 0)
+            && Math.max(enemy, hostile[i]) > 0.6 * T[i].troops * defenseOf(state, map, i)) score = val / 2 + 1 + Math.min(3, 2 * Math.max(enemy, hostile[i]) / Math.max(1, T[i].troops * defenseOf(state, map, i)));
           if (level === 'easy' && kind === 'fort') score = 0;
-          if (late && kind !== 'barracks') score = 0; // fin de partie : place à l'offensive
           const cost = buildCost(state, pi, kind);
           const s2 = score * 30 / cost;
           if (score >= 3 && (!plan || s2 > plan.score)) plan = { t: i, kind, cost, score: s2 };
@@ -1035,7 +1035,8 @@
       }
       // construire si l'or en trop suffit (une petite réserve reste pour les soldats)
       const reserve = { easy: 25, normal: 15, hard: 10 }[level] || 15;
-      if (plan && p.gold >= plan.cost + reserve + defenseGold && doAct({ type: 'build', t: plan.t, kind: plan.kind })) { plan = null; p.lastBuild = state.time; }
+      // (la construction ne prend pas la place d'une attaque ou d'un achat : elle a son propre clic)
+      if (plan && p.gold >= plan.cost + reserve + defenseGold && applyAction(state, map, pi, { type: 'build', t: plan.t, kind: plan.kind })) { plan = null; p.lastBuild = state.time; }
     }
     // or réservé au bâtiment visé quand rien ne presse (pas de frappe en préparation)
     const saving = plan && !strike && !late && defenseGold === 0 ? plan.cost : 0;
@@ -1079,7 +1080,8 @@
           const ratio = T[i].troops * defenseOf(state, map, i) / enemy;
           if (ratio < worst) { worst = ratio; spot = i; }
         }
-        doAct({ type: 'buy', t: spot, n: left });
+        // beaucoup d'or qui dort (100 et plus) : un clic « Max » en plus, même sans action restante
+        if (!doAct({ type: 'buy', t: spot, n: left }) && left >= 25) applyAction(state, map, pi, { type: 'buy', t: spot, n: left });
       }
     }
 

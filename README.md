@@ -113,9 +113,10 @@ humain ou bot) :
   des renforts de leurs territoires voisins ;
 - **bâtiments** : ils n'achètent qu'avec l'or en trop (jamais au détriment de la défense ou d'une attaque à préparer),
   en épargnant quand rien ne presse : mines à l'arrière (surtout la capitale et en début de partie), casernes près du front
-  ou sur leur base de frappe, forts sur un territoire de valeur menacé (capitale, ville, montagne), en nombre limité ;
-  jamais dans les premières minutes (2 min 30 en normal), au plus un toutes les 45 s, et seulement une fois
-  le front et la capitale correctement défendus ; après 15 minutes, ils misent sur l'offensive (casernes seulement) ;
+  ou sur leur base de frappe, forts sur un territoire de valeur menacé ou attaqué (un pour 4 territoires au plus) ;
+  dès la 1re minute en normal (2 min en facile, 45 s en difficile), au plus un toutes les 15 s en normal (30 s en facile,
+  10 s en difficile), et seulement une fois le front, la capitale et les territoires attaqués correctement défendus ;
+  construire ne leur coûte pas une attaque ; l'or qui dort (100 et plus) part en soldats sur le front ;
 - **capitale** (normal et difficile) : une garnison permanente, qui grossit avec le temps et face à un voisin fort ;
 - un bot qui est lui-même premier cherche à achever ses adversaires. Les bots faciles restent opportunistes.
 
