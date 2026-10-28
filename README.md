@@ -65,7 +65,7 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
 - **Bâtiments** (test, désactivables) : Fort 30 or (+50 % de défense chacun), Mine 35 or (+6 or par versement : remboursée en moins de 30 s),
   Caserne 45 or (+1 soldat toutes les 3 s). Sur la carte, chaque territoire montre ses bâtiments, pour tous les joueurs :
   badge gris (F = fort), jaune (M = mine), rouge (C = caserne), avec le nombre s'il y en a plusieurs. Chaque achat rend **le même type** 10 % plus cher (les autres types ne bougent pas).
-  Un territoire peut avoir 2 mines et 2 casernes, mais 1 seul fort ; une **capitale** (★) jusqu'à 4 mines et 4 casernes, et 2 forts.
+  Un territoire peut avoir 2 mines et 2 casernes, mais 1 seul fort ; une **capitale** (★) jusqu'à 5 mines et 5 casernes, et 2 forts.
   Les bâtiments restent en place si le territoire change de main.
 - **Envoi de troupes** : depuis un de tes territoires vers n'importe quel territoire. Il reste toujours 1 soldat sur place.
   Le trajet passe de préférence par tes territoires ; un territoire neutre ou ennemi sur le chemin est attaqué :
@@ -76,7 +76,7 @@ La version solo est publiée sur **https://fabgeo.github.io/Battleworldsold/** (
 - Chaque **capitale de départ** (joueur et bots) garde une étoile ★ toute la partie.
 - **Capitale prise** : le vaincu perd la moitié de son or, que le vainqueur récupère.
 - Un joueur sans territoire ni armée en marche est éliminé : celui qui lui a pris son dernier territoire **récupère tout son or restant, et au moins 100 or**.
-- **Victoire** : contrôler **75 % des territoires** (domination), ou être le dernier en vie.
+- **Victoire** : contrôler **75 % des territoires** (domination), tenir **toutes les capitales de départ** (★), ou être le dernier en vie.
 - **Envois automatiques** : une route entre deux de tes territoires reliés ; toutes les 2 s, les soldats du premier
   (sauf 1) partent vers le second. Elle s'arrête si un des deux change de main ou si le chemin est coupé.
   À la fin : statistiques (territoires au fil du temps, captures, soldats achetés, plus grande bataille).

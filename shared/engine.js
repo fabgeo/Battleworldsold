@@ -48,12 +48,12 @@
   }
 
   // Nombre de bâtiments d'un type sur un territoire, et maximum autorisé :
-  // 1 de chaque type, sauf dans une capitale (★) : 3 de chaque, mais 2 forts au plus
+  // 2 mines et 2 casernes, 1 fort ; dans une capitale (★) : 5 mines et 5 casernes, 2 forts
   const countOf = (t, kind) => t.buildings.reduce((n, k) => n + (k === kind), 0);
   function maxBuildings(state, ti, kind) {
     const isCap = (state.capitals || []).includes(ti);
     if (kind === 'fort') return isCap ? 2 : 1;
-    return isCap ? 4 : 2;
+    return isCap ? 5 : 2;
   }
   // Or rapporté par un territoire à chaque versement : base + terrain + mines + capitale
   function terrIncome(state, map, i) {
@@ -723,9 +723,16 @@
     const alive = state.players.map((p, i) => (p.alive ? i : -1)).filter(i => i >= 0);
     // Victoire par domination : contrôler 75 % des territoires
     const dom = counts.findIndex(c => c >= Math.ceil(state.territories.length * (state.opts.domination || 1)));
+    // Victoire par les capitales : tenir toutes les capitales de départ (★)
+    const caps = state.capitals || [];
+    const capOwner = caps.length > 1 && caps.every(c => state.territories[c].owner === state.territories[caps[0]].owner) ? state.territories[caps[0]].owner : -1;
     if (dom >= 0 && state.players.length > 1) {
       state.winner = dom;
       state.winBy = 'domination';
+      recordHistory(state);
+    } else if (capOwner >= 0 && state.players.length > 1) {
+      state.winner = capOwner;
+      state.winBy = 'capitals';
       recordHistory(state);
     } else if (alive.length <= 1 && state.players.length > 1) {
       state.winner = alive.length ? alive[0] : -1;

@@ -970,7 +970,8 @@
     setPaused(false);
     const me = st.players[G.me];
     $('overTitle').textContent = over ? (st.winner === G.me ? 'Victoire !' : st.winner >= 0 ? `Défaite. ${st.players[st.winner].name} a gagné` : 'Match nul') : 'Tu as été éliminé';
-    $('overSub').textContent = over ? 'Durée de la partie : ' + fmtTime(st.time) : `Éliminé après ${fmtTime(me.stats.outAt || st.time)}. La partie continue entre les autres joueurs.`;
+    const how = { domination: 'Victoire par domination (75 % de la carte)', capitals: 'Victoire en tenant toutes les capitales', elimination: 'Victoire par élimination' }[st.winBy];
+    $('overSub').textContent = over ? (how && st.winner >= 0 ? how + ' · ' : '') + 'Durée de la partie : ' + fmtTime(st.time) : `Éliminé après ${fmtTime(me.stats.outAt || st.time)}. La partie continue entre les autres joueurs.`;
     $('btnWatch').classList.toggle('hidden', over);
     $('btnAgain').classList.toggle('hidden', G.mode !== 'solo');
     const rows = st.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.stats.peakTerr - a.p.stats.peakTerr);
